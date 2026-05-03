@@ -1,8 +1,8 @@
 import React from 'react';
-import { Bell, Clock, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Bell, Clock, ShieldAlert, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function TesterNotifications({ notifications }) {
+export default function TesterNotifications({ notifications, onBack }) {
   
   // Sort notifications by updatedAt descending locally
   const sortedNotifs = [...(notifications || [])].sort((a, b) => {
@@ -20,13 +20,17 @@ export default function TesterNotifications({ notifications }) {
   return (
     <div className="flex flex-col max-w-4xl mx-auto w-full pb-20 md:pb-0 h-full">
       
-      <div className="flex justify-between items-center mb-6 mt-2 px-1">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight flex items-center">
-            System Alerts
-          </h2>
-          <p className="text-sm text-slate-500 font-medium mt-1 flex items-center"><ShieldAlert className="w-4 h-4 mr-1.5 text-amber-500"/> Note: Notifications may be deleted after 2 months for data storage issues.</p>
+      {onBack && (
+        <div className="mb-4 mt-2">
+          <button onClick={onBack} className="flex items-center text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm w-max">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
+          </button>
         </div>
+      )}
+
+      <div className="flex items-center bg-amber-50 border border-amber-100 p-3 rounded-xl mb-4">
+        <ShieldAlert className="w-4 h-4 mr-2 text-amber-500 shrink-0"/> 
+        <p className="text-xs sm:text-sm text-amber-700 font-medium">Note: Notifications may be deleted after 2 months for data storage issues.</p>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-3">

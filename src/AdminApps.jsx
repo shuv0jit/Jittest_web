@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, getDocs, doc, addDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, increment, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Plus, Trash2, Edit, DollarSign, Undo, Image as ImageIcon, X, LayoutGrid, List, Users } from 'lucide-react';
+import { Plus, Trash2, Edit, DollarSign, Undo, Image as ImageIcon, X, LayoutGrid, List, Users, Download, Clock, CheckCircle, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminApps() {
@@ -237,135 +237,143 @@ export default function AdminApps() {
   };
 
   return (
-    <div className="p-4 md:p-8 h-full flex flex-col">
-      {/* Header and Add Button */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold text-blue-900">App Management</h2>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="bg-white border border-blue-100 rounded-lg flex p-1 shadow-sm shrink-0">
-            <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-blue-500'}`}><LayoutGrid className="w-5 h-5" /></button>
-            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-blue-500'}`}><List className="w-5 h-5" /></button>
+    <div className="flex flex-col max-w-7xl mx-auto w-full h-full">
+      
+      {/* Header and Sub Tabs */}
+      <div className="mb-6">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide flex-1">
+            {[
+              { id: 'To Install', label: 'To Install', icon: Download },
+              { id: 'Ongoing', label: 'Closed Testing', icon: Clock },
+              { id: 'Reviews', label: 'Reviews/Approval', icon: CheckCircle },
+              { id: 'Paid', label: 'Paid', icon: CreditCard }
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              const count = filterApps(tab.id).length;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`relative flex items-center px-3 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${isActive ? 'text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}
+                >
+                  {isActive && (
+                    <motion.div layoutId="activeTabAdmin" className="absolute inset-0 bg-blue-50 rounded-xl border border-blue-100/50" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                  )}
+                  <span className="relative z-10 flex items-center">
+                    <Icon className="w-4 h-4 mr-2 hidden sm:block" />
+                    {tab.label}
+                    <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <button 
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center justify-center transition-colors shadow-sm font-semibold"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Add New App
-          </button>
+          <div className="flex items-center gap-2 h-full shrink-0 ml-auto sm:ml-0">
+            <button 
+              onClick={() => setIsAddModalOpen(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl flex items-center justify-center transition-colors shadow-sm font-bold text-sm h-full"
+            >
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2" />
+              <span className="hidden sm:inline">Add App</span>
+            </button>
+            <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm h-full">
+              <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+              <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex overflow-x-auto space-x-4 mb-6 border-b border-gray-200 pb-1 scrollbar-hide">
-        {['To Install', 'Ongoing', 'Reviews', 'Paid'].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`pb-2 px-2 md:px-4 text-sm font-medium transition-colors relative whitespace-nowrap ${
-              activeTab === tab ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab === 'To Install' && 'To Install '}
-            {tab === 'Ongoing' && 'Closed Testing '}
-            {tab === 'Reviews' && 'Reviews/Approval '}
-            {tab === 'Paid' && 'Paid '}
-            <span className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs">
-              {filterApps(tab).length}
-            </span>
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-md" />
-            )}
-          </button>
-        ))}
-      </div>
-
       {/* App Grid */}
-      {loading ? (
-        <div className="flex-1 flex justify-center items-center text-blue-600">Loading Apps...</div>
-      ) : (
-        <div className="flex-1 overflow-y-auto pr-2">
-          {currentApps.length === 0 ? (
-            <div className="text-center text-gray-400 mt-10">No apps found in this section.</div>
-          ) : (
-            <motion.div variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 pb-6" : "flex flex-col gap-4 pb-6"}>
+      <div>
+        {loading ? (
+          <div className="flex justify-center items-center h-64 text-blue-600 font-bold animate-pulse">Loading Apps...</div>
+        ) : currentApps.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <div className="w-20 h-20 bg-slate-100 rounded-[2rem] flex items-center justify-center mb-4"><LayoutGrid className="w-10 h-10 text-slate-300" /></div>
+            <h3 className="text-xl font-black text-slate-700">No Apps Found</h3>
+            <p className="text-slate-400 font-medium mt-2">There are no applications in this section.</p>
+          </div>
+        ) : (
+          <motion.div variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-2 gap-3 sm:gap-4" : "flex flex-col gap-3"}>
               {currentApps.map((app) => (
-                <motion.div variants={itemVariants} key={app.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-6 relative group flex ${viewMode === 'list' ? 'flex-col md:flex-row md:items-center gap-4' : 'flex-col'}`}>
+              <motion.div variants={itemVariants} key={app.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-3 sm:p-4 relative group flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center gap-3 sm:gap-4' : 'flex-col text-center'}`}>
                   
                   {/* Close/Delete Button */}
                   <button 
                     onClick={() => handleDeleteApp(app.id)}
-                    className="absolute top-4 right-4 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors z-10"
+                    className="absolute top-2 right-2 sm:top-3 sm:right-3 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors z-10"
                     title="Delete App"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
 
-                  <div className="flex items-center flex-1 min-w-0 pr-8">
+                  <div className={`flex flex-1 min-w-0 w-full ${viewMode === 'list' ? 'items-center text-left pr-8' : 'flex-col items-center pt-2'}`}>
                     {app.imageUrl ? (
-                      <img src={app.imageUrl} alt={app.finalAppName} className="w-14 h-14 rounded-xl object-cover shadow-sm mr-4 border border-gray-100" />
+                      <img src={app.imageUrl} alt={app.finalAppName} className={`rounded-xl object-cover shadow-sm border border-gray-100 shrink-0 ${viewMode === 'list' ? 'w-12 h-12 mr-4' : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'}`} />
                     ) : (
-                      <div className="w-14 h-14 rounded-xl bg-blue-50 flex items-center justify-center mr-4 text-blue-300 border border-blue-100">
+                      <div className={`rounded-xl bg-blue-50 flex items-center justify-center text-blue-300 border border-blue-100 shrink-0 ${viewMode === 'list' ? 'w-12 h-12 mr-4' : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'}`}>
                         <ImageIcon className="w-6 h-6" />
                       </div>
                     )}
-                    <div className="flex-1 overflow-hidden">
-                      <h3 className="font-bold text-gray-900 truncate" title={app.finalAppName}>{app.finalAppName}</h3>
-                      <p className="text-[11px] text-gray-500 truncate mt-0.5 font-medium" title={app.pNameStr}>{app.pNameStr}</p>
+                    <div className="flex-1 overflow-hidden w-full">
+                      <h3 className="font-bold text-gray-900 truncate text-sm sm:text-base" title={app.finalAppName}>{app.finalAppName}</h3>
+                      <p className="text-[9px] sm:text-[11px] text-gray-500 truncate mt-0.5 font-medium" title={app.pNameStr}>{app.pNameStr}</p>
                     </div>
                   </div>
 
                   {/* Stats */}
-                  <div className={`grid grid-cols-2 gap-4 bg-blue-50/30 p-3 rounded-lg border border-blue-50/50 ${viewMode === 'list' ? 'md:w-64' : 'my-4'}`}>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Installs</div>
-                      <div className="font-semibold text-blue-900">{app.displayTesterCount} / 12</div>
+                  <div className={`grid grid-cols-2 gap-2 w-full ${viewMode === 'grid' ? 'my-3' : 'mt-3 sm:mt-0 sm:w-40 shrink-0'}`}>
+                    <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
+                      <div className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold">Installs</div>
+                      <div className="font-bold text-blue-900 text-xs sm:text-sm">{app.displayTesterCount}/12</div>
                     </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Days</div>
-                      <div className="font-semibold text-blue-900">{app.daysActive} / 14</div>
+                    <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
+                      <div className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold">Days</div>
+                      <div className="font-bold text-blue-900 text-xs sm:text-sm">{app.daysActive}/14</div>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className={`flex flex-wrap gap-3 w-full ${viewMode === 'list' ? 'md:w-auto mt-4 md:mt-0' : 'mt-auto pt-2'}`}>
+                  <div className={`flex gap-2 sm:gap-3 ${viewMode === 'list' ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0' : 'w-full mt-auto pt-2'}`}>
                     <button 
                       onClick={() => setMissingTestersApp(app)}
-                      className="flex-1 md:flex-none min-h-[44px] border border-amber-200 text-amber-600 bg-amber-50 py-2.5 px-3 rounded-xl text-sm font-semibold hover:bg-amber-100 flex justify-center items-center transition-colors"
+                      className="flex-1 sm:flex-none border border-amber-200 text-amber-600 bg-amber-50 py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-amber-100 flex justify-center items-center transition-colors"
                       title="View Missing Testers"
                     >
-                      <Users className="w-4 h-4 md:mr-1" /> <span className={viewMode === 'grid' ? '' : 'hidden md:inline'}>Missing</span>
+                      <Users className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Missing</span>
                     </button>
 
                     <button 
                       onClick={() => handleEditClick(app)}
-                      className="flex-1 md:flex-none min-h-[44px] border border-gray-200 text-gray-600 py-2.5 px-3 rounded-xl text-sm font-semibold hover:bg-gray-50 flex justify-center items-center transition-colors"
+                      className="flex-1 sm:flex-none border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors"
                     >
-                      <Edit className="w-4 h-4 md:mr-1" /> <span className={viewMode === 'grid' ? '' : 'hidden md:inline'}>Edit</span>
+                      <Edit className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Edit</span>
                     </button>
                     
                     {!app.isPaidByAdmin ? (
                       <button 
                         onClick={() => handlePayToggle(app.id, true)}
-                        className="flex-1 md:flex-none min-h-[44px] bg-emerald-600 text-white py-2.5 px-3 rounded-xl text-sm font-semibold hover:bg-emerald-700 flex justify-center items-center transition-colors shadow-sm"
+                        className="flex-1 sm:flex-none bg-emerald-600 text-white py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-emerald-700 flex justify-center items-center transition-colors shadow-sm"
                       >
-                        <DollarSign className="w-4 h-4 md:mr-1" /> <span className={viewMode === 'grid' ? '' : 'hidden md:inline'}>Pay</span>
+                        <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Pay</span>
                       </button>
                     ) : (
                       <button 
                         onClick={() => handlePayToggle(app.id, false)}
-                        className="flex-1 md:flex-none min-h-[44px] bg-red-500 text-white py-2.5 px-3 rounded-xl text-sm font-semibold hover:bg-red-600 flex justify-center items-center transition-colors shadow-sm"
+                        className="flex-1 sm:flex-none bg-red-500 text-white py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-red-600 flex justify-center items-center transition-colors shadow-sm"
                       >
-                        <Undo className="w-4 h-4 md:mr-1" /> <span className={viewMode === 'grid' ? '' : 'hidden md:inline'}>Unpay</span>
+                        <Undo className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Unpay</span>
                       </button>
                     )}
                   </div>
                 </motion.div>
               ))}
             </motion.div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Add App Modal */}
       {isAddModalOpen && (

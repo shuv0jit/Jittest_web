@@ -104,27 +104,67 @@ export default function TesterPanel() {
         return <WithdrawalHistory lockedBalance={lockedBalance} paidAppsCount={paidAppsCount} />;
 
       case 'notifications':
-        return <TesterNotifications notifications={notifications} />;
+        return <TesterNotifications notifications={notifications} onBack={() => setActiveTab('apps')} />;
 
       case 'profile':
         return (
-          <div className="h-full flex items-center justify-center">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100 p-12 max-w-lg w-full text-center relative overflow-hidden">
-              <div className="relative inline-block mb-6">
-                <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
-                <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(testerData.name || 'User')}&background=0f172a&color=fff&size=128&bold=true`} alt="Profile" className="w-32 h-32 rounded-full border-4 border-white shadow-xl relative z-10" />
-              </div>
-              <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">{testerData.name}</h2>
-              <p className="text-slate-500 font-semibold mb-8">{testerData.email}</p>
+          <div className="h-full flex flex-col max-w-4xl mx-auto">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden mt-2">
               
-              <div className="bg-slate-50 rounded-2xl p-6 mb-8 border border-slate-100 shadow-inner">
-                <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-2">Total Tested Apps</div>
-                <div className="text-5xl font-black text-blue-600">{totalTestedCount}</div>
+              {/* Cover Banner */}
+              <div className="h-32 sm:h-48 bg-gradient-to-r from-blue-600 to-indigo-700 relative overflow-hidden">
+                 <div className="absolute inset-0 bg-white/10 mix-blend-overlay"></div>
+                 <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-white/20 rounded-full blur-3xl pointer-events-none"></div>
+                 <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none"></div>
               </div>
 
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={logout} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold tracking-wide hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20 flex justify-center items-center">
-                <LogOut className="w-5 h-5 mr-2" /> Sign Out from Node
-              </motion.button>
+              <div className="px-6 sm:px-10 pb-8 sm:pb-10 relative">
+                {/* Avatar & Top Actions */}
+                <div className="flex justify-between items-end -mt-12 sm:-mt-16 mb-6">
+                  <div className="relative">
+                    <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white bg-slate-100 shadow-xl overflow-hidden relative z-10">
+                      <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(testerData.name || 'User')}&background=eff6ff&color=2563eb&size=128&bold=true`} alt="Profile" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 w-5 h-5 sm:w-6 sm:h-6 bg-green-500 border-2 border-white rounded-full z-20 shadow-sm" title="Online"></div>
+                  </div>
+                  
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={logout} className="hidden sm:flex bg-red-50 text-red-600 px-5 py-2.5 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors shadow-sm items-center border border-red-100 hover:border-red-500">
+                    <LogOut className="w-4 h-4 mr-2" /> Sign Out
+                  </motion.button>
+                </div>
+
+                {/* User Info */}
+                <div className="mb-8">
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight flex items-center">
+                    {testerData.name}
+                    <span className="ml-3 px-2.5 py-1 bg-blue-50 text-blue-600 text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border border-blue-100 flex items-center">
+                      <CheckCircle2 className="w-3 h-3 mr-1" /> Verified Tester
+                    </span>
+                  </h2>
+                  <p className="text-slate-500 font-medium mt-1">{testerData.email}</p>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-2">
+                  <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 hover:shadow-sm transition-shadow">
+                    <div className="text-[10px] sm:text-xs text-slate-400 font-bold tracking-widest uppercase mb-1 sm:mb-2 flex items-center"><PlaySquare className="w-3.5 h-3.5 mr-1.5 text-blue-400" /> Total Tested</div>
+                    <div className="text-2xl sm:text-4xl font-black text-slate-800">{totalTestedCount}</div>
+                  </div>
+                  <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 hover:shadow-sm transition-shadow">
+                    <div className="text-[10px] sm:text-xs text-slate-400 font-bold tracking-widest uppercase mb-1 sm:mb-2 flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-emerald-400" /> Paid Apps</div>
+                    <div className="text-2xl sm:text-4xl font-black text-slate-800">{paidAppsCount}</div>
+                  </div>
+                  <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 col-span-2 md:col-span-1 hover:shadow-sm transition-shadow">
+                    <div className="text-[10px] sm:text-xs text-slate-400 font-bold tracking-widest uppercase mb-1 sm:mb-2 flex items-center"><Wallet className="w-3.5 h-3.5 mr-1.5 text-amber-400" /> Locked Balance</div>
+                    <div className="text-2xl sm:text-4xl font-black text-slate-800">{lockedBalance} <span className="text-sm font-bold text-slate-400">TK</span></div>
+                  </div>
+                </div>
+
+                {/* Mobile Logout Button */}
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={logout} className="w-full sm:hidden py-3.5 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors shadow-sm flex justify-center items-center border border-red-100 hover:border-red-500 mt-6">
+                  <LogOut className="w-5 h-5 mr-2" /> Sign Out
+                </motion.button>
+              </div>
             </motion.div>
           </div>
         );
@@ -139,12 +179,12 @@ export default function TesterPanel() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
-        <header className="h-20 bg-white border-b border-slate-100 px-4 sm:px-8 flex items-center justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] sticky top-0 z-30">
+        <header className="h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 sm:px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 shrink-0">
           <div className="flex items-center">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden mr-4 p-2 text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
               <Menu className="w-6 h-6" />
             </button>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h2>
+            <h2 className="text-lg sm:text-xl font-black text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h2>
           </div>
           
           <div className="flex items-center gap-3">
@@ -162,12 +202,8 @@ export default function TesterPanel() {
              </motion.button>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-4 sm:p-8">
-          <AnimatePresence mode="wait">
-            <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="h-full">
-              {renderContent()}
-            </motion.div>
-          </AnimatePresence>
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
+          {renderContent()}
         </main>
       </div>
     </div>

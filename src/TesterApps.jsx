@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
-import { Download, Clock, CheckCircle, CreditCard, PlaySquare, CheckCircle2 } from 'lucide-react';
+import { Download, Clock, CheckCircle, CreditCard, PlaySquare, CheckCircle2, LayoutGrid, List } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function TesterApps() {
@@ -10,6 +10,7 @@ export default function TesterApps() {
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState('install');
+  const [viewMode, setViewMode] = useState('grid');
 
   // Real-time Firestore Listener
   useEffect(() => {
@@ -116,13 +117,12 @@ export default function TesterApps() {
   };
 
   return (
-    <div className="flex flex-col max-w-7xl mx-auto w-full pb-20 md:pb-0">
+    <div className="flex flex-col max-w-7xl mx-auto w-full h-full">
       
       {/* Header and Sub Tabs */}
-      <div className="mb-8">
-        <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight mb-4">Application Pipeline</h2>
-        
-        <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide">
+      <div className="mb-6">
+        <div className="flex justify-between items-center gap-2 sm:gap-3">
+          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide flex-1">
           {[
             { id: 'install', label: 'To Install', icon: Download },
             { id: 'ongoing', label: 'Ongoing', icon: Clock },
@@ -136,7 +136,7 @@ export default function TesterApps() {
               <button
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id)}
-                className={`relative flex items-center px-4 sm:px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${isActive ? 'text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}
+                className={`relative flex items-center px-3 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${isActive ? 'text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}
               >
                 {isActive && (
                   <motion.div layoutId="activeSubTab" className="absolute inset-0 bg-blue-50 rounded-xl border border-blue-100/50" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
@@ -148,41 +148,48 @@ export default function TesterApps() {
               </button>
             );
           })}
+          </div>
+          <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm shrink-0 h-full">
+            <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+            <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+          </div>
         </div>
       </div>
 
       {/* Cards Grid */}
-      <AnimatePresence mode="wait">
+      {/* BUG FIX: Removed outer AnimatePresence to prevent React tree crashes on rapid tab switching. The inner stagger animation is sufficient. */}
+      <div>
         {currentApps.length === 0 ? (
-          <motion.div key="empty-state" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center h-64 text-center">
+          <motion.div key="empty-state" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-64 text-center">
             <div className="w-20 h-20 bg-slate-100 rounded-[2rem] flex items-center justify-center mb-4"><CheckCircle className="w-10 h-10 text-slate-300" /></div>
             <h3 className="text-xl font-black text-slate-700">No Applications Found</h3>
             <p className="text-slate-400 font-medium mt-2">You're completely caught up in this section.</p>
           </motion.div>
         ) : (
-          <motion.div key="grid-state" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <motion.div key="grid-state" variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-2 gap-3 sm:gap-4" : "flex flex-col gap-3"}>
             {currentApps.map((app) => (
               <AppCard 
                 key={app.id} 
                 app={app} 
                 section={activeSubTab} 
                 onInstallClick={() => handleInstallClick(app)} 
+                viewMode={viewMode}
               />
             ))}
           </motion.div>
         )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 }
 
 // Responsive & Animated App Card Component
-const AppCard = ({ app, section, onInstallClick }) => {
+const AppCard = ({ app, section, onInstallClick, viewMode }) => {
   const pNameStr = typeof app.packageName === 'string' ? app.packageName : '';
   const finalAppName = app.appName || (pNameStr ? pNameStr.split('.').pop() : 'Unknown Application');
   
   const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, y: 15 },
     show: { opacity: 1, y: 0 }
   };
 
@@ -196,62 +203,64 @@ const AppCard = ({ app, section, onInstallClick }) => {
     <motion.div 
       variants={itemVariants}
       whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }} // Mobile Press Interaction
       onClick={handleCardClick}
-      className="cursor-pointer bg-white/90 backdrop-blur-xl p-5 rounded-[1.5rem] shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-blue-50 flex flex-col relative overflow-hidden group"
+      className={`cursor-pointer bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-3 sm:p-4 relative group flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center gap-3 sm:gap-4' : 'flex-col text-center'}`}
     >
-      <div className="flex items-center mb-6 gap-4 relative z-10">
+      {/* App Info */}
+      <div className={`flex flex-1 min-w-0 w-full ${viewMode === 'list' ? 'items-center text-left' : 'flex-col items-center'}`}>
         {app.imageUrl ? (
-          <img src={app.imageUrl} alt={finalAppName} className="w-16 h-16 rounded-2xl object-cover shadow-sm ring-1 ring-slate-900/5" />
+          <img src={app.imageUrl} alt={finalAppName} className={`rounded-xl object-cover shadow-sm border border-gray-100 shrink-0 ${viewMode === 'list' ? 'w-12 h-12 mr-4' : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'}`} />
         ) : (
-          <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center border border-blue-100">
-            <PlaySquare className="w-7 h-7 text-blue-400" />
+          <div className={`rounded-xl bg-blue-50 flex items-center justify-center text-blue-300 border border-blue-100 shrink-0 ${viewMode === 'list' ? 'w-12 h-12 mr-4' : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'}`}>
+            <PlaySquare className="w-6 h-6" />
           </div>
         )}
-        <div className="flex-1 overflow-hidden">
-          <h3 className="font-black text-lg text-slate-800 truncate leading-tight group-hover:text-blue-600 transition-colors">{finalAppName}</h3>
-          <p className="text-xs font-semibold text-slate-400 truncate mt-1">{app.packageName}</p>
+        <div className="flex-1 overflow-hidden w-full">
+          <h3 className="font-bold text-slate-800 truncate group-hover:text-blue-600 transition-colors text-sm sm:text-base">{finalAppName}</h3>
+          <p className="text-[9px] sm:text-[11px] text-slate-400 truncate mt-0.5 font-medium">{app.packageName}</p>
         </div>
       </div>
 
-      {/* Dynamic Section Based Bottom Area */}
-      <div className="mt-auto w-full space-y-3">
-        <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
-          <span>Registered Testers</span>
-          <span className="text-blue-600">{app.displayTesterCount || 0}/12</span>
+      {/* Stats */}
+      <div className={`grid grid-cols-2 gap-2 w-full ${viewMode === 'grid' ? 'my-3' : 'mt-3 sm:mt-0 sm:w-40 shrink-0'}`}>
+        <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 text-center">
+          <div className="text-[9px] sm:text-[10px] text-slate-500 mb-0.5 uppercase font-bold">Installs</div>
+          <div className="font-bold text-slate-800 text-xs sm:text-sm">{app.displayTesterCount}/12</div>
         </div>
+        <div className={`bg-slate-50 p-2 rounded-lg border border-slate-100 text-center transition-opacity ${section === 'install' ? 'opacity-40' : ''}`}>
+          <div className="text-[9px] sm:text-[10px] text-slate-500 mb-0.5 uppercase font-bold">Days</div>
+          <div className="font-bold text-slate-800 text-xs sm:text-sm">{section === 'install' ? '0' : app.daysActive}/14</div>
+        </div>
+      </div>
 
+      {/* Actions */}
+      <div className={`flex gap-2 sm:gap-3 ${viewMode === 'list' ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0' : 'w-full mt-auto'}`}>
         {section === 'install' && (
-          <button onClick={(e) => { e.stopPropagation(); onInstallClick(); }} className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20 flex justify-center items-center">
-            <Download className="w-4 h-4 mr-2"/> Install via Play Store
+          <button onClick={(e) => { e.stopPropagation(); onInstallClick(); }} className="w-full bg-blue-600 text-white py-2 sm:py-3 rounded-xl text-[11px] sm:text-sm font-bold hover:bg-blue-700 transition-colors shadow-md shadow-blue-600/20 flex justify-center items-center">
+            <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2"/> Install
           </button>
         )}
 
         {section === 'ongoing' && (
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-             <div className="flex justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-               <span>Testing Progress</span>
-               <span className="text-blue-600">Day {app.daysActive}/14</span>
-             </div>
-             <div className="w-full bg-slate-200/80 rounded-full h-2.5 overflow-hidden">
+          <div className="w-full bg-slate-50 p-2 sm:p-3 rounded-xl border border-slate-100">
+             <div className="w-full bg-slate-200/80 rounded-full h-1.5 sm:h-2 overflow-hidden" title={`Day ${app.daysActive} of 14`}>
                 <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (app.daysActive / 14) * 100)}%` }} transition={{ duration: 1, ease: "easeOut" }} className="bg-blue-500 h-full rounded-full" />
              </div>
           </div>
         )}
 
         {section === 'production' && (
-          <div className="w-full bg-blue-50 text-blue-600 py-3 rounded-xl text-sm font-bold flex justify-center items-center border border-blue-100">
-             <CheckCircle2 className="w-4 h-4 mr-2"/> Testing Complete
+          <div className="w-full bg-blue-50 text-blue-600 py-2 sm:py-3 rounded-xl text-[10px] sm:text-sm font-bold flex justify-center items-center border border-blue-100">
+             <CheckCircle2 className="w-3 h-3 mr-1"/> Complete
           </div>
         )}
 
         {section === 'paid' && (
-          <div className="w-full bg-emerald-50 text-emerald-600 py-3 rounded-xl text-sm font-bold flex justify-center items-center border border-emerald-100">
-             <CheckCircle2 className="w-4 h-4 mr-2"/> Payment Dispatched
+          <div className="w-full bg-emerald-50 text-emerald-600 py-2 sm:py-3 rounded-xl text-[10px] sm:text-sm font-bold flex justify-center items-center border border-emerald-100">
+             <CheckCircle2 className="w-3 h-3 mr-1"/> Paid
           </div>
         )}
       </div>
-      
     </motion.div>
   );
 };

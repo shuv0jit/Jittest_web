@@ -128,21 +128,21 @@ export default function AdminTesters() {
   };
 
   return (
-    <div className="p-4 md:p-8 h-full flex flex-col">
-      
-      {/* View Mode Toggle */}
-      <div className="flex justify-between items-end mb-4">
-        <h3 className="text-lg font-black text-slate-800 tracking-tight">Tester Directory</h3>
-        <div className="bg-white border border-slate-200 rounded-lg flex p-1 shadow-sm shrink-0">
-          <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4" /></button>
-          <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4" /></button>
+    <div className="flex flex-col max-w-7xl mx-auto w-full h-full">
+
+      {/* Header and Controls */}
+      <div className="flex justify-between items-center mb-6 mt-2">
+        <h2 className="text-xl font-black text-slate-800 tracking-tight hidden sm:block">Tester Directory</h2>
+        <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm shrink-0 ml-auto">
+          <button onClick={() => setViewMode('grid')} className={`p-1.5 sm:p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+          <button onClick={() => setViewMode('list')} className={`p-1.5 sm:p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
         </div>
       </div>
 
       {loading ? (
         <div className="flex-1 flex justify-center items-center text-blue-600">Loading Testers...</div>
       ) : (
-        <motion.div variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 overflow-y-auto pb-6 pr-2 scrollbar-hide" : "flex flex-col gap-4 overflow-y-auto pb-6 pr-2 scrollbar-hide"}>
+        <motion.div variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-2 gap-3 sm:gap-4 overflow-y-auto pb-6 pr-2 scrollbar-hide" : "flex flex-col gap-3 overflow-y-auto pb-6 pr-2 scrollbar-hide"}>
           {testers.map((tester) => {
             const activeToday = isTestedToday(tester.lastGoalMetDate);
             
@@ -152,43 +152,43 @@ export default function AdminTesters() {
             const calculatedTotalWithdrawn = Math.max(0, yAmount - withdrawable);
             
             return (
-              <motion.div variants={itemVariants} key={tester.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex relative hover:shadow-md transition-shadow gap-6 ${viewMode === 'list' ? 'flex-col lg:flex-row lg:items-center justify-between' : 'flex-col justify-between'}`}>
+              <motion.div variants={itemVariants} key={tester.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-3 sm:p-4 relative group flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center gap-3 sm:gap-4' : 'flex-col text-center'}`}>
                 
-                {/* Avatar & Info (Left) */}
-                <div className={`flex items-center gap-4 w-full ${viewMode === 'list' ? 'lg:w-auto' : ''}`}>
-                  <div className="relative shrink-0">
-                    <div className={`w-14 h-14 rounded-full border-2 p-0.5 ${activeToday ? 'border-green-500' : 'border-red-500'}`}>
+                {/* Avatar & Info */}
+                <div className={`flex flex-1 min-w-0 w-full ${viewMode === 'list' ? 'items-center text-left' : 'flex-col items-center pt-2'}`}>
+                  <div className={`relative shrink-0 ${viewMode === 'list' ? 'mr-4' : 'mb-2 sm:mb-3'}`}>
+                    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 p-0.5 ${activeToday ? 'border-green-500' : 'border-red-500'}`}>
                       <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(tester.name)}&background=random`} alt="Profile" className="w-full h-full rounded-full" />
                     </div>
                     <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${activeToday ? 'bg-green-500' : 'bg-red-500'}`} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-black text-lg text-slate-800 truncate" title={tester.name}>{tester.name || "Unknown"}</h3>
-                    <p className="text-xs font-semibold text-slate-500 mt-0.5 truncate">{tester.email}</p>
-                    <span className="inline-block mt-1 bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">App v{tester.appVersion || "N/A"}</span>
+                  <div className="flex-1 overflow-hidden w-full">
+                    <h3 className="font-bold text-gray-900 truncate text-sm sm:text-base" title={tester.name}>{tester.name || "Unknown"}</h3>
+                    <p className="text-[9px] sm:text-[11px] text-gray-500 truncate mt-0.5 font-medium">{tester.email}</p>
+                    <span className="inline-block mt-1 bg-slate-100 text-slate-600 text-[9px] sm:text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">App v{tester.appVersion || "N/A"}</span>
                   </div>
                 </div>
 
-                {/* Balances Grid (Middle) */}
-                <div className={`grid grid-cols-3 gap-4 w-full bg-slate-50/50 p-4 rounded-xl border border-slate-100 ${viewMode === 'list' ? 'lg:flex-1 lg:max-w-xl' : ''}`}>
-                  <div>
-                    <span className="text-gray-500 block text-xs">Locked Balance</span>
-                    <span className="font-black text-base text-slate-800">{globalLockedBalance} <span className="text-xs text-slate-400 font-medium">TK</span></span>
+                {/* Balances Grid */}
+                <div className={`grid grid-cols-3 gap-2 w-full ${viewMode === 'grid' ? 'my-3' : 'mt-3 sm:mt-0 sm:w-[280px] shrink-0'}`}>
+                  <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
+                    <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Locked</span>
+                    <span className="font-bold text-blue-900 text-xs sm:text-sm">{globalLockedBalance}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-500 block text-xs">Withdrawable</span>
-                    <span className="font-black text-base text-emerald-600">{withdrawable} <span className="text-xs text-emerald-400 font-medium">TK</span></span>
+                  <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
+                    <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Withdrawn</span>
+                    <span className="font-bold text-emerald-600 text-xs sm:text-sm">{withdrawable}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-500 block text-xs">Total Paid</span>
-                    <span className="font-black text-base text-blue-600">{calculatedTotalWithdrawn} <span className="text-xs text-blue-400 font-medium">TK</span></span>
+                  <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
+                    <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Paid</span>
+                    <span className="font-bold text-blue-600 text-xs sm:text-sm">{calculatedTotalWithdrawn}</span>
                   </div>
                 </div>
 
-                {/* Action (Right) */}
-                <div className={`absolute top-4 right-4 ${viewMode === 'list' ? 'lg:relative lg:top-0 lg:right-0' : ''}`}>
-                  <button onClick={() => openEditModal(tester)} className="text-blue-500 hover:text-white bg-blue-50 hover:bg-blue-600 p-2.5 rounded-xl transition-colors shadow-sm" title="Edit Balances">
-                    <Edit2 className="w-5 h-5" />
+                {/* Action */}
+                <div className={`flex gap-2 sm:gap-3 ${viewMode === 'list' ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0' : 'w-full mt-auto pt-2'}`}>
+                  <button onClick={() => openEditModal(tester)} className="w-full flex-1 border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors" title="Edit Balances">
+                    <Edit2 className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Edit</span>
                   </button>
                 </div>
 

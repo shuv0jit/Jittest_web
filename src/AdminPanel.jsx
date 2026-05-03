@@ -88,31 +88,31 @@ export default function AdminPanel() {
       </AnimatePresence>
 
       {/* Futuristic Sidebar */}
-      <div className={`fixed inset-y-0 left-0 w-[260px] bg-slate-900 text-slate-300 flex flex-col z-[70] shadow-2xl transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 md:p-8 flex items-center justify-between border-b border-slate-800/50 shrink-0">
+      <div className={`fixed inset-y-0 left-0 w-[260px] bg-white text-slate-600 border-r border-slate-100 flex flex-col z-[70] shadow-2xl transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 md:p-8 flex items-center justify-between border-b border-slate-100 shrink-0">
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex items-center mx-auto md:mx-0">
              <img src="/logo.jpg" alt="JitTest Logo" className="h-10 w-auto object-contain rounded-lg" />
           </motion.div>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white"><X className="w-6 h-6" /></button>
+          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-slate-800"><X className="w-6 h-6" /></button>
         </div>
         
         <nav className="flex-1 mt-6 px-4 space-y-2 overflow-y-auto">
-          <button onClick={() => {setActiveTab('apps'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'apps' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+          <button onClick={() => {setActiveTab('apps'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'apps' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'}`}>
             <LayoutDashboard className="w-5 h-5 mr-3" /> Apps
           </button>
-          <button onClick={() => {setActiveTab('testers'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'testers' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+          <button onClick={() => {setActiveTab('testers'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'testers' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'}`}>
             <Users className="w-5 h-5 mr-3" /> Testers
           </button>
-          <button onClick={() => {setActiveTab('withdrawals'); setIsSidebarOpen(false);}} className={`w-full flex items-center justify-between px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'withdrawals' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+          <button onClick={() => {setActiveTab('withdrawals'); setIsSidebarOpen(false);}} className={`w-full flex items-center justify-between px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'withdrawals' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'}`}>
             <div className="flex items-center"><CreditCard className="w-5 h-5 mr-3" /> Withdrawals</div>
             {pendingWithdrawalsCount > 0 && (
               <span className="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
             )}
           </button>
-          <button onClick={() => {setActiveTab('history'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+          <button onClick={() => {setActiveTab('history'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'}`}>
             <History className="w-5 h-5 mr-3" /> System History
           </button>
-          <button onClick={() => {setActiveTab('shares'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'shares' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+          <button onClick={() => {setActiveTab('shares'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'shares' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'}`}>
             <Calculator className="w-5 h-5 mr-3" /> Calc & Shares
           </button>
         </nav>
@@ -143,16 +143,14 @@ export default function AdminPanel() {
           </div>
         </header>
         <main className="flex-1 overflow-auto bg-slate-50/50 p-4 md:p-8">
-          <AnimatePresence mode="wait">
-            <motion.div key={activeTab} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.2 }} className="h-full">
-              {activeTab === 'apps' && <AdminApps />}
-              {activeTab === 'testers' && <AdminTesters />}
-              {activeTab === 'withdrawals' && <AdminWithdrawals />}
-              {activeTab === 'history' && <AdminHistory />}
-              {activeTab === 'shares' && <AdminShares />}
-              {activeTab === 'notifications' && <AdminNotifications notifications={notifications} />}
-            </motion.div>
-          </AnimatePresence>
+          <div className="h-full">
+            {activeTab === 'apps' && <AdminApps />}
+            {activeTab === 'testers' && <AdminTesters />}
+            {activeTab === 'withdrawals' && <AdminWithdrawals />}
+            {activeTab === 'history' && <AdminHistory />}
+            {activeTab === 'shares' && <AdminShares />}
+            {activeTab === 'notifications' && <AdminNotifications notifications={notifications} onBack={() => setActiveTab('apps')} />}
+          </div>
         </main>
       </div>
     </div>

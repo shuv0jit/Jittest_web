@@ -139,49 +139,50 @@ export default function WithdrawalHistory({ lockedBalance, paidAppsCount }) {
   };
 
   return (
-    <div className="h-full flex flex-col max-w-5xl mx-auto pb-20">
-      
-      <div className="mb-6 sm:mb-10 mt-2">
-        <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight flex items-center">
-          <Wallet className="mr-3 w-7 h-7 text-blue-600" /> Financial Dashboard
-        </h2>
-        <p className="text-sm text-slate-500 font-medium mt-1">Manage your earnings and transaction history</p>
-      </div>
+    <div className="h-full flex flex-col max-w-5xl mx-auto">
 
       {/* Upgraded Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-8 mt-2">
         
         {/* Withdrawable Balance Card (Green) */}
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col justify-between">
-           <div className="flex items-center gap-3 mb-4">
-             <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center"><Wallet className="w-5 h-5 text-emerald-500" /></div>
-             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Withdrawable</p>
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-2 bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-lg shadow-emerald-500/20 border border-emerald-400 relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+           <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mt-10" />
+           
+           <div className="relative z-10">
+             <div className="flex items-center gap-3 mb-2">
+               <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm"><Wallet className="w-5 h-5 text-white" /></div>
+               <p className="text-emerald-100 text-xs font-bold uppercase tracking-widest flex items-center">Withdrawable <span className="ml-2 w-2 h-2 bg-white rounded-full animate-pulse" /></p>
+             </div>
+             <h3 className="text-4xl sm:text-5xl font-black text-white tracking-tight drop-shadow-sm">{withdrawableFromDB} <span className="text-xl sm:text-2xl font-bold text-emerald-200">TK</span></h3>
            </div>
-           <h3 className="text-3xl font-black text-emerald-600 tracking-tight mb-4">{withdrawableFromDB} <span className="text-base font-medium text-emerald-400">TK</span></h3>
-           <button onClick={() => setIsPopupOpen(true)} className="w-full bg-emerald-500 text-white font-bold py-3 rounded-xl hover:bg-emerald-600 transition-colors text-sm shadow-md shadow-emerald-500/20 flex justify-center items-center">
+
+           <button onClick={() => setIsPopupOpen(true)} className="relative z-10 w-full sm:w-auto bg-white text-emerald-600 font-bold py-3.5 px-6 rounded-xl hover:bg-emerald-50 transition-colors shadow-md flex justify-center items-center shrink-0">
               Request Withdrawal <ArrowRight className="w-4 h-4 ml-2" />
            </button>
         </motion.div>
 
-        {/* Total Withdrawn Card (Blue) */}
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white p-5 rounded-2xl border border-blue-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col justify-center">
-           <div className="flex items-center gap-3 mb-4">
-             <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center"><CheckCircle2 className="w-5 h-5 text-blue-500" /></div>
-             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Withdrawn</p>
-           </div>
-           <h3 className="text-3xl font-black text-blue-600 tracking-tight">{totalWithdrawn} <span className="text-base font-medium text-blue-400">TK</span></h3>
-           <p className="text-[11px] text-slate-400 font-medium mt-3 leading-relaxed">Successfully processed to your account</p>
-        </motion.div>
+        <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:col-span-1">
+          {/* Locked Balance Card (Amber) */}
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white p-4 sm:p-5 rounded-2xl border border-amber-100 shadow-sm flex flex-col justify-center relative overflow-hidden group">
+             <div className="absolute top-0 right-0 w-24 h-24 bg-amber-50 rounded-full blur-2xl -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+             <div className="flex items-center gap-2 sm:gap-2.5 mb-2 sm:mb-3 relative z-10">
+               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-50 flex items-center justify-center shrink-0"><Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" /></div>
+               <p className="text-slate-500 text-[9px] sm:text-xs font-bold uppercase tracking-wider truncate">Locked Balance</p>
+             </div>
+             <h3 className="text-xl sm:text-3xl font-black text-amber-600 tracking-tight relative z-10">{lockedBalance} <span className="text-xs sm:text-sm font-medium text-amber-400">TK</span></h3>
+          </motion.div>
 
-        {/* Locked Balance Card (Amber) */}
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white p-5 rounded-2xl border border-amber-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col justify-center">
-           <div className="flex items-center gap-3 mb-4">
-             <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center"><Lock className="w-5 h-5 text-amber-500" /></div>
-             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Locked Balance</p>
-           </div>
-           <h3 className="text-3xl font-black text-amber-600 tracking-tight">{lockedBalance} <span className="text-base font-medium text-amber-400">TK</span></h3>
-           <p className="text-[11px] text-slate-400 font-medium mt-3 leading-relaxed">Secured from Install & Ongoing tests</p>
-        </motion.div>
+          {/* Total Withdrawn Card (Blue) */}
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white p-4 sm:p-5 rounded-2xl border border-blue-100 shadow-sm flex flex-col justify-center relative overflow-hidden group">
+             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full blur-2xl -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+             <div className="flex items-center gap-2 sm:gap-2.5 mb-2 sm:mb-3 relative z-10">
+               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" /></div>
+               <p className="text-slate-500 text-[9px] sm:text-xs font-bold uppercase tracking-wider truncate">Total Withdrawn</p>
+             </div>
+             <h3 className="text-xl sm:text-3xl font-black text-blue-600 tracking-tight relative z-10">{totalWithdrawn} <span className="text-xs sm:text-sm font-medium text-blue-400">TK</span></h3>
+          </motion.div>
+        </div>
       </div>
 
       {/* Ledger History Style */}

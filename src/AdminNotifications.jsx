@@ -1,10 +1,10 @@
 import React from 'react';
 import { db } from './firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { Bell, Trash2, Clock } from 'lucide-react';
+import { Bell, Trash2, Clock, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function AdminNotifications({ notifications }) {
+export default function AdminNotifications({ notifications, onBack }) {
   
   const handleDelete = async (id) => {
     try {
@@ -22,6 +22,13 @@ export default function AdminNotifications({ notifications }) {
 
   return (
     <div className="p-4 md:p-8 h-full flex flex-col">
+      {onBack && (
+        <div className="mb-6">
+          <button onClick={onBack} className="flex items-center text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm w-max">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
+          </button>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-blue-900 flex items-center tracking-tight">
           <Bell className="w-6 h-6 mr-3 text-blue-600" /> System Notifications

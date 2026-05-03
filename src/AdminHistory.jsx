@@ -1,8 +1,8 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { Search, ChevronDown, ChevronUp, Clock, CheckCircle } from 'lucide-react';
+import { collection, onSnapshot, query, orderBy, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { Search, ChevronDown, ChevronUp, Clock, CheckCircle, Edit2, X, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function AdminHistory() {
@@ -12,6 +12,25 @@ export default function AdminHistory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [globalPaidAppsCount, setGlobalPaidAppsCount] = useState(0);
+  const [manualSystemTotal, setManualSystemTotal] = useState(null);
+  const [isTotalEditModalOpen, setIsTotalEditModalOpen] = useState(false);
+  const [editSystemTotalValue, setEditSystemTotalValue] = useState('');
+  
+  const [editingRequest, setEditingRequest] = useState(null);
+  const [editReqAmount, setEditReqAmount] = useState(0);
+  const [editReqStatus, setEditReqStatus] = useState('');
+
+  // Real-time listen to manual override for system total
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'systemSettings', 'totals'), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().manualTotalSystemWithdrawn !== undefined && docSnap.data().manualTotalSystemWithdrawn !== null) {
+        setManualSystemTotal(docSnap.data().manualTotalSystemWithdrawn);
+      } else {
+        setManualSystemTotal(null);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   // Real-time listen to global apps for math logic
   useEffect(() => {
@@ -72,6 +91,32 @@ export default function AdminHistory() {
     return Object.values(groups);
   }, [requests, usersDict]);
 
+  const handleTotalEditSubmit = async (e) => {
+    e.preventDefault();
+    const val = editSystemTotalValue === '' ? null : Number(editSystemTotalValue);
+    await setDoc(doc(db, 'systemSettings', 'totals'), { manualTotalSystemWithdrawn: val }, { merge: true });
+    setIsTotalEditModalOpen(false);
+  };
+
+  const openRequestEditModal = (req) => {
+    setEditingRequest(req);
+    setEditReqAmount(req.amount);
+    setEditReqStatus(req.status);
+  };
+
+  const handleRequestEditSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await updateDoc(doc(db, 'withdrawRequests', editingRequest.id), {
+        amount: Number(editReqAmount),
+        status: editReqStatus
+      });
+      setEditingRequest(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const filteredData = groupedData.filter(g => 
     (g.testerName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -95,13 +140,20 @@ export default function AdminHistory() {
     }
     return sum;
   }, 0);
+  
+  const displayTotal = manualSystemTotal !== null ? manualSystemTotal : systemTotalWithdrawn;
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
         <div>
           <h2 className="text-2xl font-bold text-blue-900">Tester Withdrawal Profiles</h2>
-          <p className="text-sm font-semibold text-slate-500 mt-1">Total System Withdrawn: <span className="font-black text-emerald-600">{systemTotalWithdrawn} TK</span></p>
+          <p className="text-sm font-semibold text-slate-500 mt-1 flex items-center">
+            Total System Withdrawn: <span className="font-black text-emerald-600 ml-1">{displayTotal} TK</span>
+            <button onClick={() => { setEditSystemTotalValue(displayTotal); setIsTotalEditModalOpen(true); }} className="ml-2 text-slate-400 hover:text-blue-600 transition-colors p-1 bg-slate-100 hover:bg-blue-50 rounded-md" title="Edit Total System Withdrawn">
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+          </p>
         </div>
         <div className="relative w-full md:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
@@ -152,9 +204,14 @@ export default function AdminHistory() {
                           {req.requestedAt?.toDate ? req.requestedAt.toDate().toLocaleString() : new Date(req.requestedAt).toLocaleString()}
                         </div>
                       </div>
-                      <div className={`px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold flex items-center border ${req.status === 'paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : req.status === 'declined' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                        {req.status === 'paid' && <CheckCircle className="w-3 h-3 mr-1.5" />}
-                        {req.status.toUpperCase()}
+                      <div className="flex items-center gap-2">
+                        <div className={`px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold flex items-center border ${req.status === 'paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : req.status === 'declined' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                          {req.status === 'paid' && <CheckCircle className="w-3 h-3 mr-1.5" />}
+                          {req.status.toUpperCase()}
+                        </div>
+                        <button onClick={() => openRequestEditModal(req)} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200" title="Edit Request">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -165,6 +222,72 @@ export default function AdminHistory() {
         ))}
         </motion.div>
       )}
+
+      {/* Total System Withdrawn Edit Modal */}
+      {isTotalEditModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-bold text-slate-800">Edit Total System Withdrawn</h3>
+              <button onClick={() => setIsTotalEditModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="bg-red-50 border border-red-100 p-4 rounded-xl mb-5 flex items-start">
+              <ShieldAlert className="w-5 h-5 text-red-500 mr-3 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-red-700 uppercase tracking-wider mb-1">Danger Zone</p>
+                <p className="text-xs font-medium text-red-600 leading-relaxed">STRICT WARNING: Do not edit this unless you absolutely need to manually override the system total. Admins are strictly advised NOT to use this.</p>
+              </div>
+            </div>
+            <form onSubmit={handleTotalEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Override Amount (TK) <span className="lowercase text-gray-400 font-normal">(Leave empty to reset to auto-calc)</span></label>
+                <input 
+                  type="number" 
+                  value={editSystemTotalValue} 
+                  onChange={(e) => setEditSystemTotalValue(e.target.value)} 
+                  className="w-full px-4 py-3 border border-red-200 bg-red-50/30 text-red-900 font-bold rounded-xl outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all" 
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setIsTotalEditModalOpen(false)} className="px-4 py-2 text-slate-600 bg-slate-100 rounded-xl font-bold hover:bg-slate-200 transition-colors">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-white bg-red-600 rounded-xl font-bold hover:bg-red-700 transition-colors">Save Override</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Single Request Edit Modal */}
+      {editingRequest && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-bold text-slate-800">Edit History Record</h3>
+              <button onClick={() => setEditingRequest(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleRequestEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Amount (TK)</label>
+                <input type="number" required value={editReqAmount} onChange={(e) => setEditReqAmount(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all font-semibold" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Status</label>
+                <select value={editReqStatus} onChange={(e) => setEditReqStatus(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all font-semibold bg-white">
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                  <option value="declined">Declined</option>
+                </select>
+              </div>
+              <p className="text-xs text-amber-600 font-medium bg-amber-50 p-3 rounded-lg border border-amber-100">Warning: Editing this record will change the tester's total withdrawn sum in the system history page.</p>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setEditingRequest(null)} className="px-4 py-2 text-slate-600 bg-slate-100 rounded-xl font-bold hover:bg-slate-200 transition-colors">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-white bg-blue-600 rounded-xl font-bold hover:bg-blue-700 transition-colors">Update Record</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

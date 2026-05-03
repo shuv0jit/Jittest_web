@@ -111,7 +111,7 @@ export default function WalletSection() {
   };
 
   return (
-    <div className="h-full flex flex-col max-w-5xl mx-auto pb-20">
+    <div className="h-full flex flex-col max-w-5xl mx-auto">
       
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight flex items-center">
