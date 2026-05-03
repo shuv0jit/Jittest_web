@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, ArrowRight, Mail, Lock, Loader2, Play, CheckSquare, Bug, Code2, Terminal, Shield } from 'lucide-react';
+import { ArrowRight, Mail, Lock, Loader2, Shield } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -33,45 +33,27 @@ export default function Login() {
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-50 flex items-center justify-center overflow-hidden font-sans p-4">
-      {/* Floating Development & Testing Animated Background */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-slate-50">
-        <motion.div animate={{ y: [0, -20, 0], opacity: [0.05, 0.15, 0.05] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[10%] left-[10%]">
-          <Terminal className="w-24 h-24 text-blue-500" />
-        </motion.div>
-        <motion.div animate={{ y: [0, 30, 0], opacity: [0.05, 0.1, 0.05] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 1 }} className="absolute top-[60%] left-[8%]">
-          <Bug className="w-32 h-32 text-indigo-500" />
-        </motion.div>
-        <motion.div animate={{ y: [0, -40, 0], opacity: [0.05, 0.2, 0.05] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 }} className="absolute top-[20%] right-[10%]">
-          <Play className="w-28 h-28 text-cyan-500" />
-        </motion.div>
-        <motion.div animate={{ y: [0, 20, 0], opacity: [0.05, 0.15, 0.05] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 3 }} className="absolute bottom-[15%] right-[15%]">
-          <CheckSquare className="w-20 h-20 text-emerald-500" />
-        </motion.div>
-        <motion.div animate={{ scale: [1, 1.05, 1], opacity: [0.02, 0.08, 0.02] }} transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[40%] left-[40%]">
-          <Code2 className="w-64 h-64 text-slate-400" />
-        </motion.div>
-      </div>
-
+    <div className="relative min-h-screen bg-white flex items-center justify-center overflow-hidden font-sans p-4">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" }} className="relative z-10 w-full max-w-[420px]">
         
-        <div className="bg-white/90 p-8 sm:p-10 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(37,99,235,0.15)] border border-white backdrop-blur-xl relative overflow-hidden">
-          {/* Glassmorphic Shine Effect */}
-          <div className="absolute top-0 left-[-100%] w-[200%] h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -skew-x-12 pointer-events-none" />
-          
-          <div className="text-center mb-10">
-            <div className="relative inline-block mb-6">
-              <div className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl animate-pulse"></div>
-              <motion.img 
-                src="/logo.jpg" 
-                alt="JitTest Logo" 
-                initial={{ scale: 0 }} 
-                animate={{ scale: 1 }} 
-                transition={{ delay: 0.2, type: "spring", stiffness: 200 }} 
-                className="relative z-10 mx-auto h-20 w-auto object-contain drop-shadow-md rounded-2xl" 
-              />
-            </div>
-            <p className="text-sm text-slate-500 mt-2 font-medium">Secure access to your testing dashboard</p>
+        <div className="bg-white p-8 sm:p-10 rounded-[2rem] shadow-sm border border-slate-100 relative overflow-hidden">
+          <div className="text-center mb-8">
+            <motion.div 
+              initial={{ scale: 0 }} 
+              animate={{ scale: 1 }} 
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              className="flex justify-center items-center gap-3 mb-5"
+            >
+              
+              <img src="/logo.jpg" alt="JitTest Logo" className="h-20 w-auto object-contain rounded-xl shadow-sm border border-slate-100" />
+            </motion.div>
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+              Hey, Welcome Back! 
+            </h2>
+            <p className="mt-3 text-sm text-slate-500 font-medium leading-relaxed">
+              Sign in to your account <br />
+              
+            </p>
           </div>
 
           <AnimatePresence>
