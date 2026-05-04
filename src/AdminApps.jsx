@@ -333,12 +333,12 @@ export default function AdminApps() {
           <div className="flex items-center gap-2 h-full shrink-0 ml-auto sm:ml-0">
             <button 
               onClick={() => setIsAddModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl flex items-center justify-center transition-colors shadow-sm font-bold text-sm h-full"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl flex items-center justify-center transition-colors shadow-sm font-bold text-sm min-h-[44px] h-full"
             >
               <Plus className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2" />
               <span className="hidden sm:inline">Add App</span>
             </button>
-            <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm h-full">
+            <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm min-h-[44px] h-full">
               <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
               <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
             </div>
@@ -357,7 +357,7 @@ export default function AdminApps() {
             <p className="text-slate-400 font-medium mt-2">There are no applications in this section.</p>
           </div>
         ) : (
-          <motion.div variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-2 gap-3 sm:gap-4" : "flex flex-col gap-3"}>
+          <motion.div variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-3"}>
               {currentApps.map((app) => (
               <motion.div variants={itemVariants} key={app.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-3 sm:p-4 relative group flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center gap-3 sm:gap-4' : 'flex-col text-center'}`}>
                   
@@ -400,7 +400,7 @@ export default function AdminApps() {
                   <div className={`flex gap-2 sm:gap-3 ${viewMode === 'list' ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0' : 'w-full mt-auto pt-2'}`}>
                     <button 
                       onClick={() => setMissingTestersApp(app)}
-                      className="flex-1 sm:flex-none border border-amber-200 text-amber-600 bg-amber-50 py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-amber-100 flex justify-center items-center transition-colors"
+                      className="flex-1 sm:flex-none border border-amber-200 text-amber-600 bg-amber-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-amber-100 flex justify-center items-center transition-colors"
                       title="View Missing Testers"
                     >
                       <Users className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Missing</span>
@@ -408,7 +408,7 @@ export default function AdminApps() {
 
                     <button 
                       onClick={() => handleEditClick(app)}
-                      className="flex-1 sm:flex-none border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors"
+                      className="flex-1 sm:flex-none border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors"
                     >
                       <Edit className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Edit</span>
                     </button>
@@ -416,14 +416,14 @@ export default function AdminApps() {
                     {!app.isPaidByAdmin ? (
                       <button 
                         onClick={() => handlePayToggle(app.id, true)}
-                        className="flex-1 sm:flex-none bg-emerald-600 text-white py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-emerald-700 flex justify-center items-center transition-colors shadow-sm"
+                        className="flex-1 sm:flex-none bg-emerald-600 text-white py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-emerald-700 flex justify-center items-center transition-colors shadow-sm"
                       >
                         <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Pay</span>
                       </button>
                     ) : (
                       <button 
                         onClick={() => handlePayToggle(app.id, false)}
-                        className="flex-1 sm:flex-none bg-red-500 text-white py-2 sm:py-2.5 px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-red-600 flex justify-center items-center transition-colors shadow-sm"
+                        className="flex-1 sm:flex-none bg-red-500 text-white py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-red-600 flex justify-center items-center transition-colors shadow-sm"
                       >
                         <Undo className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Unpay</span>
                       </button>
