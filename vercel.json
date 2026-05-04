@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "rewrites": [
     {
       "source": "/(.*)",
@@ -18,8 +19,8 @@
           "value": "upgrade-insecure-requests"
         },
         {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
         }
       ]
     }
