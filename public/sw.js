@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jittest-network-first-v2';
+const CACHE_NAME = 'jittest-network-first-v3';
 
 // Install event: skip waiting to ensure the new service worker activates immediately
 self.addEventListener('install', (event) => {

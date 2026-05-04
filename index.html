@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
+    <!-- Force top-level HTTPS redirect to prevent "Not Secure" loops -->
+    <script>
+      if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
+        window.location.replace('https://' + window.location.host + window.location.pathname + window.location.search);
+      }
+    </script>
+
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
     <link rel="icon" type="image/png" href="/jittest.png" />
     <title>JitTest</title>
