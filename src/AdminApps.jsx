@@ -75,6 +75,18 @@ export default function AdminApps() {
 
       const docRef = await addDoc(collection(db, 'apps'), newApp);
       setIsAddModalOpen(false);
+      
+      // Trigger background push notifications via Vercel Serverless Function
+      try {
+        fetch('/api/notifyNewApp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appName: finalAppName })
+        }).catch(err => console.error("Notification API failed:", err));
+      } catch(e) {
+        // Catch sync errors silently so UI flow isn't blocked
+      }
+
       setAppLink('');
       setPackageName('');
       setAppName('');

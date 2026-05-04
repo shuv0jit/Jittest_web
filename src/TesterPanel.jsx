@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
-import { doc, getDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
-import { Wallet, User, LogOut, CheckCircle2, PlaySquare, ArrowRight, Menu, Bell } from 'lucide-react';
+import { doc, getDoc, updateDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
+import { getMessaging, getToken, isSupported } from 'firebase/messaging';
+import { Wallet, User, LogOut, CheckCircle2, PlaySquare, ArrowRight, Menu, Bell, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TesterApps from './TesterApps';
 import TesterSidebar from './TesterSidebar';
@@ -19,6 +20,7 @@ export default function TesterPanel() {
   const [lockedBalance, setLockedBalance] = useState(0);
   const [paidAppsCount, setPaidAppsCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
+  const [showNotifBanner, setShowNotifBanner] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -33,6 +35,35 @@ export default function TesterPanel() {
     };
     fetchData();
   }, [currentUser]);
+
+  // Check if we need to ask for Notification permissions
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      setShowNotifBanner(true);
+    }
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    try {
+      const supported = await isSupported();
+      if (!supported) return setShowNotifBanner(false); // Silently fail if not supported (e.g., Safari iOS)
+      
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted' && currentUser) {
+        const messaging = getMessaging();
+        // IMPORTANT: Replace with your Firebase Project's VAPID Key from Project Settings > Cloud Messaging -> Web configuration
+        const token = await getToken(messaging, { vapidKey: 'YOUR_VAPID_PUBLIC_KEY_HERE' });
+        
+        if (token) {
+          await updateDoc(doc(db, 'users', currentUser.uid), { fcmToken: token });
+        }
+      }
+      setShowNotifBanner(false);
+    } catch (error) {
+      console.error("Failed to enable notifications", error);
+      setShowNotifBanner(false);
+    }
+  };
 
   // Fetch Tester Notifications
   useEffect(() => {
@@ -202,6 +233,29 @@ export default function TesterPanel() {
              </motion.button>
           </div>
         </header>
+        
+        {/* Notification Permission Banner */}
+        <AnimatePresence>
+          {showNotifBanner && (
+            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="m-4 sm:mx-6 bg-blue-600 rounded-2xl p-4 sm:p-5 shadow-lg shadow-blue-600/20 text-white flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden z-20 shrink-0">
+              <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+                   <Bell className="w-5 h-5 text-white" />
+                 </div>
+                 <div>
+                   <h4 className="font-bold text-base">Enable Push Notifications</h4>
+                   <p className="text-blue-100 text-sm font-medium mt-0.5">Get instantly notified when a new app is available to test!</p>
+                 </div>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto relative z-10">
+                 <button onClick={() => setShowNotifBanner(false)} className="flex-1 px-4 py-2 bg-blue-700 hover:bg-blue-800 rounded-xl text-sm font-bold transition-colors sm:w-auto text-center">Maybe Later</button>
+                 <button onClick={handleEnableNotifications} className="flex-1 px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-xl text-sm font-bold transition-colors shadow-sm sm:w-auto text-center">Allow Notifications</button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <main className="flex-1 overflow-auto p-4 sm:p-6">
           {renderContent()}
         </main>
