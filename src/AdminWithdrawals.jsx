@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminWithdrawals() {
   const [requests, setRequests] = useState([]);
+  const [usersDict, setUsersDict] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -14,11 +15,21 @@ export default function AdminWithdrawals() {
     const q = query(collection(db, 'withdrawRequests'), orderBy('requestedAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
       const allRequests = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const pendingRequests = allRequests.filter(req => req.status === 'pending' || !req.status);
+      const pendingRequests = allRequests.filter(req => req.status === 'pending' || req.status === 'requested' || req.status === 'Pending' || !req.status);
       setRequests(pendingRequests);
       setLoading(false);
     });
     return () => unsub();
+  }, []);
+
+  // Real-time listen to users mapping to fetch names by testerId
+  useEffect(() => {
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+      const dict = {};
+      snap.docs.forEach(d => { dict[d.id] = d.data(); });
+      setUsersDict(dict);
+    });
+    return () => unsubUsers();
   }, []);
 
   const handleAction = async (req, status) => {
@@ -69,7 +80,7 @@ export default function AdminWithdrawals() {
           {requests.map(req => (
             <motion.div variants={itemVariants} key={req.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:shadow-md transition-shadow">
               <div>
-                <h3 className="font-black text-lg text-slate-800">{req.testerName || "Tester Name"}</h3>
+                <h3 className="font-black text-lg text-slate-800">{usersDict[req.testerId]?.name || req.testerName || "Unknown Tester"}</h3>
                 <div className="flex items-center text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">
                   <Clock className="w-3.5 h-3.5 mr-1.5" />
                   {req.requestedAt?.toDate ? req.requestedAt.toDate().toLocaleString() : new Date(req.requestedAt).toLocaleString()}

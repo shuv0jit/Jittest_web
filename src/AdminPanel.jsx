@@ -29,7 +29,7 @@ export default function AdminPanel() {
     const unsubWithdrawals = onSnapshot(collection(db, 'withdrawRequests'), (snap) => {
       const count = snap.docs.filter(d => {
         const data = d.data();
-        return data.status === 'pending' || !data.status;
+        return data.status === 'pending' || data.status === 'requested' || data.status === 'Pending' || !data.status;
       }).length;
       setPendingWithdrawalsCount(count);
     });

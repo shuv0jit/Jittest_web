@@ -62,7 +62,7 @@ export default function AdminApps() {
       const newApp = {
         appName: finalAppName,
         createdAt: serverTimestamp(),
-        installedCount: 0,
+        installedCount: 1, // Auto-include your admin tester account
         isPaidByAdmin: false,
         packageName: packageName,
         owner: appOwner,
@@ -70,7 +70,7 @@ export default function AdminApps() {
         startTime: null,
         status: 'waiting',
         targetTesters: 12,
-        testerIds: []
+        testerIds: ['Tg0UN8ayxFSzCTmTuorR0UxI2Y12'] // Your specific tester ID
       };
 
       const docRef = await addDoc(collection(db, 'apps'), newApp);
@@ -82,7 +82,9 @@ export default function AdminApps() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ appName: finalAppName })
-        }).catch(err => console.error("Notification API failed:", err));
+        }).then(async (res) => {
+          if (!res.ok) console.error("Notification API failed:", res.status, await res.text());
+        }).catch(err => console.error("Notification API network error:", err));
       } catch(e) {
         // Catch sync errors silently so UI flow isn't blocked
       }

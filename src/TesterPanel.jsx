@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
-import { getMessaging, getToken, isSupported } from 'firebase/messaging';
+import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
 import { Wallet, User, LogOut, CheckCircle2, PlaySquare, ArrowRight, Menu, Bell, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TesterApps from './TesterApps';
@@ -64,6 +64,25 @@ export default function TesterPanel() {
       setShowNotifBanner(false);
     }
   };
+
+  // Handle Foreground Notifications (When the user has the website actively open)
+  useEffect(() => {
+    const setupForegroundMessaging = async () => {
+      const supported = await isSupported();
+      if (supported && currentUser) {
+        const messaging = getMessaging();
+        onMessage(messaging, (payload) => {
+          if (Notification.permission === 'granted') {
+            new Notification(payload.notification.title, {
+              body: payload.notification.body,
+              icon: '/jittest.png'
+            });
+          }
+        });
+      }
+    };
+    setupForegroundMessaging();
+  }, [currentUser]);
 
   // Fetch Tester Notifications
   useEffect(() => {

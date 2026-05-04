@@ -42,16 +42,22 @@ export default function WalletSection() {
   // 3. Real-time Withdrawals History & Cooldown Logic
   useEffect(() => {
     if (!currentUser) return;
-    const q = query(collection(db, 'withdrawals'), where('testerId', '==', currentUser.uid));
+    const q = query(collection(db, 'withdrawRequests'), where('testerId', '==', currentUser.uid));
     const unsubHistory = onSnapshot(q, (snapshot) => {
       const records = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Sort descending by date
-      records.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
+      // Sort descending by requestedAt (Newest first)
+      records.sort((a, b) => {
+        const dateA = a.requestedAt?.toDate ? a.requestedAt.toDate().getTime() : new Date(a.requestedAt || a.createdAt || 0).getTime();
+        const dateB = b.requestedAt?.toDate ? b.requestedAt.toDate().getTime() : new Date(b.requestedAt || b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
       setHistory(records);
 
       // Cooldown Calculation (48 hours)
       if (records.length > 0) {
-        const lastTime = new Date(records[0].createdAt).getTime();
+        const mostRecent = records[0];
+        const lastTime = mostRecent.requestedAt?.toDate ? mostRecent.requestedAt.toDate().getTime() : new Date(mostRecent.requestedAt || mostRecent.createdAt || 0).getTime();
         const hoursSince = (Date.now() - lastTime) / (1000 * 60 * 60);
         if (hoursSince < 48) {
           setCooldownRemaining(Math.ceil(48 - hoursSince));
@@ -71,12 +77,12 @@ export default function WalletSection() {
     setIsSubmitting(true);
     try {
       // Adds to withdrawal collection. Note: We DO NOT deduct the balance here.
-      await addDoc(collection(db, 'withdrawals'), {
+      await addDoc(collection(db, 'withdrawRequests'), {
         testerId: currentUser.uid,
         testerName: userData.name || 'Tester',
         amount: Number(withdrawAmount),
-        status: 'Pending',
-        createdAt: new Date().toISOString()
+        status: 'requested',
+        requestedAt: new Date()
       });
       
       setSuccessMsg('Withdrawal requested successfully! Awaiting admin approval.');
@@ -93,20 +99,20 @@ export default function WalletSection() {
   };
 
   const getStatusStyle = (status) => {
-    if (status === 'Accepted' || status === 'Approved') return 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20 border-emerald-500';
-    if (status === 'Declined') return 'bg-transparent text-red-600 border-red-500';
+    if (status === 'Accepted' || status === 'Approved' || status === 'paid') return 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20 border-emerald-500';
+    if (status === 'Declined' || status === 'declined') return 'bg-transparent text-red-600 border-red-500';
     return 'bg-yellow-50 text-yellow-700 border-yellow-200'; // Pending
   };
 
   const getStatusContent = (status) => {
-    if (status === 'Accepted' || status === 'Approved') return <><CheckCircle2 className="w-4 h-4 mr-1.5" /> Approved</>;
-    if (status === 'Declined') return <><Info className="w-4 h-4 mr-1.5" /> Declined</>;
-    return <><div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse mr-2" /> Pending</>;
+    if (status === 'Accepted' || status === 'Approved' || status === 'paid') return <><CheckCircle2 className="w-4 h-4 mr-1.5" /> Approved</>;
+    if (status === 'Declined' || status === 'declined') return <><Info className="w-4 h-4 mr-1.5" /> Declined</>;
+    return <><div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse mr-2" /> {status === 'requested' ? 'Requested' : 'Pending'}</>;
   };
 
   const formatDateTime = (isoString) => {
     if (!isoString) return '';
-    const d = new Date(isoString);
+    const d = isoString.toDate ? isoString.toDate() : new Date(isoString);
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   };
 
@@ -172,7 +178,7 @@ export default function WalletSection() {
                 <motion.div variants={{ hidden: { opacity: 0, x: -20 }, show: { opacity: 1, x: 0 } }} key={req.id} className="flex items-center justify-between p-5 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow">
                   <div>
                     <div className="font-black text-2xl text-blue-600 mb-1">{req.amount} TK</div>
-                    <div className="text-sm text-slate-400 font-medium">{formatDateTime(req.createdAt)}</div>
+                    <div className="text-sm text-slate-400 font-medium">{formatDateTime(req.requestedAt || req.createdAt)}</div>
                   </div>
                   <div className={`px-4 py-2 rounded-xl text-sm font-bold border flex items-center ${getStatusStyle(req.status)}`}>
                     {getStatusContent(req.status)}
