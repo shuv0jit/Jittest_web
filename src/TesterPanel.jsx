@@ -52,7 +52,7 @@ export default function TesterPanel() {
       if (permission === 'granted' && currentUser) {
         const messaging = getMessaging();
         // IMPORTANT: Replace with your Firebase Project's VAPID Key from Project Settings > Cloud Messaging -> Web configuration
-        const token = await getToken(messaging, { vapidKey: 'YOUR_VAPID_PUBLIC_KEY_HERE' });
+        const token = await getToken(messaging, { vapidKey: 'BDkHiIz4ES1d2C-ErhrSuT5bDpdA-xoDCnIdibJVDUco65ZRTMeobTEepn0Mpa20YxKkdDN2PkVRyu4AVGHky0w' });
         
         if (token) {
           await updateDoc(doc(db, 'users', currentUser.uid), { fcmToken: token });
