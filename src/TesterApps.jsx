@@ -44,8 +44,11 @@ export default function TesterApps() {
       if (app.startTime) {
         const start = app.startTime.toDate ? app.startTime.toDate() : new Date(app.startTime);
         if (!isNaN(start)) {
-          const diffTime = Math.max(0, new Date() - start);
-          daysActive = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          const startMidnight = new Date(start);
+          startMidnight.setHours(0, 0, 0, 0);
+          const nowMidnight = new Date();
+          nowMidnight.setHours(0, 0, 0, 0);
+          daysActive = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24)) + 1;
         }
       }
       const appWithDays = { ...app, daysActive };
@@ -64,7 +67,7 @@ export default function TesterApps() {
       // STEP 2: Only after Step 1, evaluate 'production_access' logic
       if (appWithDays.status === 'production_access' || appWithDays.status === 'Reviews') {
         if (hasTested) {
-          if (daysActive >= 14) {
+          if (daysActive > 14) {
             categorizedApps.production.push(appWithDays);
           } else {
             categorizedApps.ongoing.push(appWithDays);
@@ -86,12 +89,29 @@ export default function TesterApps() {
     }
   }
   
-  const handleMarkInstalled = async (appId) => {
+  const handleMarkInstalled = async (app) => {
     try {
-      const appRef = doc(db, 'apps', appId);
-      await updateDoc(appRef, {
-        testerIds: arrayUnion(currentUser.uid)
-      });
+      const appRef = doc(db, 'apps', app.id);
+      
+      const isAlreadyTester = Array.isArray(app.testerIds) && app.testerIds.includes(currentUser.uid);
+      if (isAlreadyTester) return; // Prevent duplicate writes
+
+      const currentTesterCount = Math.max(Array.isArray(app.testerIds) ? app.testerIds.length : 0, app.installedCount || 0);
+      const newCount = currentTesterCount + 1;
+
+      const updates = {
+        testerIds: arrayUnion(currentUser.uid),
+        installedCount: newCount
+      };
+
+      // Upgrade database info when the 12 testers target is reached
+      if (newCount >= 12 && !app.startTime) {
+        updates.startTime = serverTimestamp();
+        updates.status = 'Ongoing';
+        updates.dayCount = 1;
+      }
+
+      await updateDoc(appRef, updates);
     } catch (error) {
       alert("Failed to mark as installed. Please try again.");
     }
@@ -101,7 +121,7 @@ export default function TesterApps() {
     if (app.packageName) {
       window.open(`https://play.google.com/store/apps/details?id=${app.packageName}`, '_blank', 'noopener,noreferrer');
     }
-    await handleMarkInstalled(app.id);
+    await handleMarkInstalled(app);
   };
 
   if (loading) {

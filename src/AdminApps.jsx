@@ -20,9 +20,11 @@ export default function AdminApps() {
   const [editAppName, setEditAppName] = useState('');
   const [editInstalledCount, setEditInstalledCount] = useState(0);
   const [editDayCount, setEditDayCount] = useState(0);
+  const [editStartTime, setEditStartTime] = useState('');
   const [editAppOwner, setEditAppOwner] = useState('dont know yet');
 
   // Form State
+  const [appLink, setAppLink] = useState('');
   const [packageName, setPackageName] = useState('');
   const [appName, setAppName] = useState('');
   const [appOwner, setAppOwner] = useState('dont know yet');
@@ -73,6 +75,7 @@ export default function AdminApps() {
 
       const docRef = await addDoc(collection(db, 'apps'), newApp);
       setIsAddModalOpen(false);
+      setAppLink('');
       setPackageName('');
       setAppName('');
       setAppOwner('dont know yet');
@@ -81,6 +84,20 @@ export default function AdminApps() {
       alert("Failed to add app.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Auto-extract package name and app name from Play Store URL
+  const handleLinkChange = (e) => {
+    const link = e.target.value;
+    setAppLink(link);
+    
+    const idMatch = link.match(/id=([a-zA-Z0-9._]+)/);
+    if (idMatch && idMatch[1]) {
+      const id = idMatch[1];
+      setPackageName(id);
+      const parts = id.split('.');
+      setAppName(parts.length >= 3 ? parts[2] : parts[parts.length - 1]);
     }
   };
 
@@ -163,6 +180,21 @@ export default function AdminApps() {
     setEditAppName(app.appName || '');
     setEditInstalledCount(Math.max(app.testerIds?.length || 0, app.installedCount || 0));
     setEditDayCount(app.daysActive || 0);
+    
+    if (app.startTime) {
+      const start = app.startTime.toDate ? app.startTime.toDate() : new Date(app.startTime);
+      if (!isNaN(start)) {
+        const year = start.getFullYear();
+        const month = String(start.getMonth() + 1).padStart(2, '0');
+        const day = String(start.getDate()).padStart(2, '0');
+        setEditStartTime(`${year}-${month}-${day}`);
+      } else {
+        setEditStartTime('');
+      }
+    } else {
+      setEditStartTime('');
+    }
+
     setEditAppOwner(app.owner || 'dont know yet');
     setIsEditModalOpen(true);
   };
@@ -170,18 +202,28 @@ export default function AdminApps() {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Update startTime so the dynamic daysActive calculation perfectly matches the edited dayCount
-      const newStartTime = new Date();
-      newStartTime.setDate(newStartTime.getDate() - Number(editDayCount));
-
       const updatedData = {
         packageName: editPackageName,
         appName: editAppName,
         installedCount: Number(editInstalledCount),
         dayCount: Number(editDayCount),
-        startTime: newStartTime,
         owner: editAppOwner
       };
+
+      if (Number(editInstalledCount) >= 12 && Number(editDayCount) === 0 && !editStartTime) {
+        // Auto-start timer if admin manually pushes installs to 12+ but leaves Day Count at 0
+        updatedData.startTime = serverTimestamp();
+        updatedData.status = 'Ongoing';
+        updatedData.dayCount = 1;
+      } else if (editStartTime) {
+        // Update startTime based on the date picker
+        const startMidnight = new Date(editStartTime);
+        startMidnight.setHours(0, 0, 0, 0);
+        updatedData.startTime = startMidnight;
+      } else {
+        updatedData.startTime = null;
+      }
+
       await updateDoc(doc(db, 'apps', editingApp.id), updatedData);
       setIsEditModalOpen(false);
       setEditingApp(null);
@@ -201,7 +243,11 @@ export default function AdminApps() {
     if (app.startTime) {
       const start = app.startTime.toDate ? app.startTime.toDate() : new Date(app.startTime);
       if (!isNaN(start)) {
-        daysActive = Math.floor(Math.max(0, new Date() - start) / (1000 * 60 * 60 * 24));
+        const startMidnight = new Date(start);
+        startMidnight.setHours(0, 0, 0, 0);
+        const nowMidnight = new Date();
+        nowMidnight.setHours(0, 0, 0, 0);
+        daysActive = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       }
     }
     
@@ -216,7 +262,7 @@ export default function AdminApps() {
       const isToInstall = !app.isPaidByAdmin && app.displayTesterCount < 12;
       if (statusFilter === 'To Install') return isToInstall;
 
-      const isReviews = app.status === 'Reviews' || app.status === 'production_access' || app.daysActive >= 14;
+      const isReviews = app.status === 'Reviews' || app.status === 'production_access' || app.daysActive > 14;
       if (statusFilter === 'Reviews') return !app.isPaidByAdmin && !isToInstall && isReviews;
       
       if (statusFilter === 'Ongoing') return !app.isPaidByAdmin && !isToInstall && !isReviews;
@@ -388,6 +434,22 @@ export default function AdminApps() {
 
             <form onSubmit={handleAddApp} className="space-y-4">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Play Store Link (Auto-fill)</label>
+                <input 
+                  type="text" 
+                  value={appLink}
+                  onChange={handleLinkChange}
+                  placeholder="https://play.google.com/store/apps/details?id=com.example.app"
+                  className="w-full px-3 py-2 border border-blue-200 bg-blue-50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+              <div className="relative flex items-center py-1">
+                 <div className="flex-grow border-t border-gray-200"></div>
+                 <span className="shrink-0 mx-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Or Manual Entry</span>
+                 <div className="flex-grow border-t border-gray-200"></div>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">App Name *</label>
                 <input 
                   type="text" 
@@ -473,7 +535,7 @@ export default function AdminApps() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Installed Count</label>
                   <input 
@@ -483,10 +545,43 @@ export default function AdminApps() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                  <input 
+                    type="date" value={editStartTime}
+                    onChange={(e) => {
+                      setEditStartTime(e.target.value);
+                      if (e.target.value) {
+                        const startMidnight = new Date(e.target.value);
+                        startMidnight.setHours(0, 0, 0, 0);
+                        const nowMidnight = new Date();
+                        nowMidnight.setHours(0, 0, 0, 0);
+                        const days = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                        setEditDayCount(days);
+                      } else {
+                        setEditDayCount(0);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Day Count</label>
                   <input 
                     type="number" required min="0" max="14" value={editDayCount}
-                    onChange={(e) => setEditDayCount(e.target.value)}
+                    onChange={(e) => {
+                      const days = Number(e.target.value);
+                      setEditDayCount(days);
+                      if (days > 0) {
+                        const newStartTime = new Date();
+                        newStartTime.setDate(newStartTime.getDate() - (days - 1));
+                        const year = newStartTime.getFullYear();
+                        const month = String(newStartTime.getMonth() + 1).padStart(2, '0');
+                        const day = String(newStartTime.getDate()).padStart(2, '0');
+                        setEditStartTime(`${year}-${month}-${day}`);
+                      } else {
+                        setEditStartTime('');
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                   />
                 </div>
