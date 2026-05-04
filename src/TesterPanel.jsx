@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { db } from './firebase';
+import { db, app } from './firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
 import { Wallet, User, LogOut, CheckCircle2, PlaySquare, ArrowRight, Menu, Bell, Info } from 'lucide-react';
@@ -50,9 +50,16 @@ export default function TesterPanel() {
       
       const permission = await Notification.requestPermission();
       if (permission === 'granted' && currentUser) {
-        const messaging = getMessaging();
+        const messaging = getMessaging(app);
+        
+        // Explicitly register the service worker to ensure it controls the push notifications
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        
         // IMPORTANT: Replace with your Firebase Project's VAPID Key from Project Settings > Cloud Messaging -> Web configuration
-        const token = await getToken(messaging, { vapidKey: 'BDkHiIz4ES1d2C-ErhrSuT5bDpdA-xoDCnIdibJVDUco65ZRTMeobTEepn0Mpa20YxKkdDN2PkVRyu4AVGHky0w' });
+        const token = await getToken(messaging, { 
+          vapidKey: 'BDkHiIz4ES1d2C-ErhrSuT5bDpdA-xoDCnIdibJVDUco65ZRTMeobTEepn0Mpa20YxKkdDN2PkVRyu4AVGHky0w',
+          serviceWorkerRegistration: registration
+        });
         
         if (token) {
           await updateDoc(doc(db, 'users', currentUser.uid), { fcmToken: token });
@@ -70,12 +77,17 @@ export default function TesterPanel() {
     const setupForegroundMessaging = async () => {
       const supported = await isSupported();
       if (supported && currentUser) {
-        const messaging = getMessaging();
+        const messaging = getMessaging(app);
         onMessage(messaging, (payload) => {
           if (Notification.permission === 'granted') {
-            new Notification(payload.notification.title, {
-              body: payload.notification.body,
-              icon: '/jittest.png'
+            // Android mobile browsers block 'new Notification()'. We must use the ServiceWorker.
+            navigator.serviceWorker.ready.then((registration) => {
+              const title = payload.notification?.title || payload.data?.title || 'New App Available';
+              const body = payload.notification?.body || payload.data?.body || 'A new app has been added for testing!';
+              registration.showNotification(title, {
+                body: body,
+                icon: '/jittest.png'
+              });
             });
           }
         });

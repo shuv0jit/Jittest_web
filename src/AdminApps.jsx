@@ -216,11 +216,17 @@ export default function AdminApps() {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
+      // 2-Step Verification: Ensure installed count does not exceed total live testers
+      let finalInstalledCount = Number(editInstalledCount);
+      if (testers.length > 0 && finalInstalledCount > testers.length) {
+        alert(`Verification Failed: You cannot set installed count to ${finalInstalledCount} because there are currently only ${testers.length} registered testers. Adjusting to the maximum available limit.`);
+        finalInstalledCount = testers.length;
+      }
+
       const updatedData = {
         packageName: editPackageName,
         appName: editAppName,
-        installedCount: Number(editInstalledCount),
-        dayCount: Number(editDayCount),
+        installedCount: (editDayCount),
         owner: editAppOwner
       };
 
@@ -264,8 +270,13 @@ export default function AdminApps() {
         daysActive = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       }
     }
-    
-    const displayTesterCount = Math.max(app.testerIds?.length || 0, app.installedCount || 0);
+    // Connected Socket Math: Ensure display count never exceeds total live testers
+    let displayTesterCount = Math.max(Array.isArray(app.testerIds) ? app.testerIds.length : 0, app.installedCount || 0);
+
+    if (testers.length > 0 && displayTesterCount > testers.length) {
+      displayTesterCount = testers.length;
+    }
+
     return { ...app, pNameStr, aNameStr, finalAppName, daysActive, displayTesterCount };
   }).filter(app => app.pNameStr || app.aNameStr); // Skip empty apps
 
@@ -644,15 +655,28 @@ export default function AdminApps() {
                 const testedIds = missingTestersApp.testerIds || [];
                 const missing = testers.filter(t => !testedIds.includes(t.id));
                 
-                if (missing.length === 0) {
+                // Real-time verification: Adjust visual missing list if admin added manual phantom installs
+                const manualInstalls = Math.max(0, (missingTestersApp.installedCount || 0) - testedIds.length);
+                let finalMissingList = missing;
+                if (manualInstalls > 0) {
+                  finalMissingList = missing.slice(manualInstalls);
+                }
+                
+                // 2-Step Socket Verification: Installed + Missing cannot exceed total testers
+                if (missingTestersApp.displayTesterCount >= testers.length) {
+                  finalMissingList = [];
+                }
+
+                if (finalMissingList.length === 0) {
                   return <div className="p-8 text-center text-emerald-600 font-bold bg-emerald-50 rounded-xl m-3 border border-emerald-100">All registered testers have installed this app!</div>;
                 }
-                return missing.map((t, idx) => (
-                  <div key={t.id} className={`flex items-center justify-between p-4 ${idx !== missing.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                return finalMissingList.map((t, idx) => (
+                  <div key={t.id} className={`flex items-center justify-between p-4 ${idx !== finalMissingList.length - 1 ? 'border-b border-gray-50' : ''}`}>
                     <div>
-                      <div className="font-bold text-gray-800 text-sm">{t.name || "Unknown Tester"}</div>
+                      <div className="font-bold text-sm text-gray-800">{t.name || 'Unknown Tester'}</div>
                       <div className="text-xs text-gray-500">{t.email}</div>
                     </div>
+                
                     <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-md text-[10px] font-bold border border-red-100">Not Installed</span>
                   </div>
                 ));
