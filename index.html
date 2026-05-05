@@ -4,19 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- Force top-level HTTPS redirect to prevent "Not Secure" loops -->
-    <script>
-      if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
-        window.location.replace('https://' + window.location.host + window.location.pathname + window.location.search);
-      }
-    </script>
-
-    <!-- EMERGENCY FIX: Force-unregister any corrupted Service Workers causing offline/unreachable errors -->
+    <!-- EMERGENCY FIX: Force-unregister corrupted Service Workers and Reload -->
     <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          let needsReload = false;
           for(let registration of registrations) { 
             registration.unregister(); 
+            needsReload = true;
+          }
+          if (needsReload && !window.location.search.includes('reloaded')) {
+            // Force a clean reload from the server once the bad workers are dead
+            window.location.href = window.location.href + (window.location.href.includes('?') ? '&' : '?') + 'reloaded=true';
           }
         });
       }
