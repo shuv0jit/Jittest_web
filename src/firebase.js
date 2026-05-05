@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// Firebase securely uses HTTPS automatically for all internal API calls
 const firebaseConfig = {
   apiKey: "AIzaSyCvvYmcpWxAPoyK02ovACkoxCh9Xzb5WHs",
   authDomain: "jittest-f1580.firebaseapp.com",
