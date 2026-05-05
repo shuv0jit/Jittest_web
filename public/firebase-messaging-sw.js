@@ -2,10 +2,19 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
 const CACHE_NAME = 'jittest-network-first-v4';
+const APP_SHELL_URLS = [
+  '/', // This will be rewritten to /index.html by Vercel and cached.
+  '/jittest.png'
+];
 
 // Install event: skip waiting to ensure the new service worker activates immediately
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[Service Worker] Pre-caching App Shell');
+      return cache.addAll(APP_SHELL_URLS);
+    }).then(() => self.skipWaiting())
+  );
 });
 
 // Activate event: claim clients so it immediately controls all open pages
@@ -25,27 +34,38 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event: Network-First Strategy
 self.addEventListener('fetch', (event) => {
-  // Only apply to GET requests (ignore API POSTs, etc.)
   if (event.request.method !== 'GET') return;
   
   // Do not cache or intercept insecure HTTP requests (prevents mixed-content cache poisoning)
   if (event.request.url.startsWith('http:')) return;
 
+  // For navigation requests, fall back to the cached app shell.
+  // This allows the SPA to load and handle routing, even when offline.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(async (error) => {
+        console.warn(`[Service Worker] Navigation failed for ${event.request.url}. Falling back to cached app shell.`, error);
+        const cache = await caches.open(CACHE_NAME);
+        return await cache.match('/');
+      })
+    );
+    return;
+  }
+
+  // For other requests (assets, APIs), use a network-first strategy.
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Network succeeded: ONLY update the cache if the response is perfectly valid (200 OK)
-        if (response && response.ok) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+    caches.open(CACHE_NAME).then(async (cache) => {
+      try {
+        const networkResponse = await fetch(event.request);
+        if (networkResponse.ok) {
+          cache.put(event.request, networkResponse.clone());
         }
-        return response;
-      })
-      .catch((error) => {
-        // Network failed (offline or timed out): fallback to the local cache
-        console.warn(`[Service Worker] Network request timed out or failed for ${event.request.url}. Falling back to cache. Reason:`, error);
-        return caches.match(event.request);
-      })
+        return networkResponse;
+      } catch (error) {
+        console.warn(`[Service Worker] Asset fetch failed for ${event.request.url}. Falling back to cache.`, error);
+        return await cache.match(event.request);
+      }
+    })
   );
 });
 
