@@ -9,6 +9,16 @@ import TesterPanel from './TesterPanel';
 const PrivateRoute = ({ children, allowedRole }) => {
   const { currentUser, role, loading } = useAuth();
   
+  React.useEffect(() => {
+    console.log(`[Auth Diagnostic] Loading: ${loading}, User: ${currentUser?.email || 'none'}, Role: ${role || 'none'}`);
+    if (loading) {
+      const timer = setTimeout(() => {
+        console.error('[Auth Timeout] App is stuck on the loading screen for more than 5 seconds! Check your internet connection or Firebase Auth initialization.');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, currentUser, role]);
+
   if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
   if (!currentUser) return <Navigate to="/login" />;
   

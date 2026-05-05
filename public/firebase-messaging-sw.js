@@ -41,8 +41,9 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => {
+      .catch((error) => {
         // Network failed (offline or timed out): fallback to the local cache
+        console.warn(`[Service Worker] Network request timed out or failed for ${event.request.url}. Falling back to cache. Reason:`, error);
         return caches.match(event.request);
       })
   );

@@ -33,18 +33,27 @@ export default function AdminApps() {
   // Real-time listener for Apps
   useEffect(() => {
     setLoading(true);
+    console.log('[AdminApps] Starting to fetch apps...');
     const unsub = onSnapshot(collection(db, 'apps'), (snapshot) => {
+      console.log(`[AdminApps] Successfully fetched ${snapshot.docs.length} apps.`);
       setApps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
+    }, (error) => {
+      console.error('[AdminApps] Apps fetch failed or timed out! Reason:', error.message);
+      setLoading(false); // Stop the infinite loading spinner
     });
     return () => unsub();
   }, []);
 
   // Fetch Testers for cross-referencing Missing Installs
   useEffect(() => {
+    console.log('[AdminApps] Starting to fetch testers...');
     const q = query(collection(db, 'users'), where("role", "==", "tester"));
     const unsub = onSnapshot(q, (snapshot) => {
+      console.log(`[AdminApps] Successfully fetched ${snapshot.docs.length} testers.`);
       setTesters(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error('[AdminApps] Testers fetch failed or timed out! Reason:', error.message);
     });
     return () => unsub();
   }, []);
