@@ -102,11 +102,11 @@ export default function AdminPanel() {
 
       {/* Futuristic Sidebar */}
       <div className={`fixed inset-y-0 left-0 w-[260px] bg-white text-slate-600 border-r border-slate-100 flex flex-col z-[70] shadow-2xl transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 md:p-8 flex items-center justify-between border-b border-slate-100 shrink-0">
+        <div className="p-4 sm:p-5 h-14 sm:h-16 flex items-center justify-between border-b border-slate-100 shrink-0">
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex items-center mx-auto md:mx-0">
-             <img src="/logo.jpg" alt="JitTest Logo" className="h-10 w-auto object-contain rounded-lg" />
+             <img src="/logo.jpg" alt="JitTest Logo" className="h-8 sm:h-9 w-auto object-contain rounded-lg" />
           </motion.div>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-slate-800"><X className="w-6 h-6" /></button>
+          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-slate-800"><X className="w-5 h-5" /></button>
         </div>
         
         <nav className="flex-1 mt-6 px-4 space-y-2 overflow-y-auto">
@@ -138,10 +138,10 @@ export default function AdminPanel() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden w-full">
-        <header className="h-20 bg-white/90 backdrop-blur-xl border-b border-slate-200/50 px-4 md:px-8 flex items-center justify-between shadow-sm sticky top-0 z-30 shrink-0">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-slate-600 hover:bg-slate-100 p-2 rounded-xl transition-colors"><Menu className="w-6 h-6" /></button>
-            <h2 className="text-xl md:text-2xl font-black text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h2>
+        <header className="h-14 sm:h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/50 px-4 sm:px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-slate-600 hover:bg-slate-100 p-1.5 sm:p-2 rounded-xl transition-colors"><Menu className="w-5 h-5 sm:w-6 sm:h-6" /></button>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-black text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h2>
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
             <button onClick={() => setActiveTab('notifications')} className="relative p-2.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">

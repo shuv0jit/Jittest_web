@@ -260,10 +260,10 @@ export default function TesterPanel() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
-        <header className="h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 sm:px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 shrink-0">
+        <header className="h-14 sm:h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 sm:px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 shrink-0">
           <div className="flex items-center">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden mr-4 p-2 text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
-              <Menu className="w-6 h-6" />
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden mr-3 p-1.5 text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
+              <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
             <h2 className="text-lg sm:text-xl font-black text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h2>
           </div>

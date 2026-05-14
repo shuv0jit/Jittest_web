@@ -313,9 +313,9 @@ export default function AdminApps() {
     <div className="flex flex-col max-w-7xl mx-auto w-full h-full">
       
       {/* Header and Sub Tabs */}
-      <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide flex-1 min-w-0">
+      <div className="mb-4 sm:mb-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 sm:gap-3">
+          <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide flex-1 min-w-0">
             {[
               { id: 'To Install', label: 'To Install', icon: Download },
               { id: 'Ongoing', label: 'Closed Testing', icon: Clock },
@@ -329,44 +329,44 @@ export default function AdminApps() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex items-center px-3 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${isActive ? 'text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}
+                  className={`relative flex items-center px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${isActive ? 'text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   {isActive && (
-                    <motion.div layoutId="activeTabAdmin" className="absolute inset-0 bg-blue-50 rounded-xl border border-blue-100/50" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                    <motion.div layoutId="activeTabAdmin" className="absolute inset-0 bg-blue-50 rounded-lg border border-blue-100/50" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
                   )}
                   <span className="relative z-10 flex items-center">
-                    <Icon className="w-4 h-4 mr-2 hidden sm:block" />
+                    <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 hidden sm:block" />
                     {tab.label}
-                    <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
+                    <span className={`ml-1.5 sm:ml-2 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] leading-none flex items-center justify-center ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
                   </span>
                 </button>
               );
             })}
           </div>
           
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 shrink-0">
-            <div className="relative w-full sm:w-56 lg:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 h-9 sm:h-10 justify-between sm:justify-start">
+              <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-blue-600 text-white rounded-xl shadow-sm hover:bg-blue-700 hover:shadow-md hover:scale-105 active:scale-95 transition-all shrink-0"
+                title="Add App"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+              <div className="bg-white border border-slate-100 rounded-xl flex p-0.5 h-full shrink-0 shadow-sm">
+                <button onClick={() => setViewMode('grid')} className={`p-1.5 sm:p-2 rounded-lg transition-colors flex items-center justify-center ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4" /></button>
+                <button onClick={() => setViewMode('list')} className={`p-1.5 sm:p-2 rounded-lg transition-colors flex items-center justify-center ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4" /></button>
+              </div>
+            </div>
+            <div className="relative w-full sm:w-48 lg:w-60 h-9 sm:h-10">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input 
                 type="text" 
                 placeholder="Search apps..." 
                 value={searchQuery} 
                 onChange={(e) => setSearchQuery(e.target.value)} 
-                className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white shadow-sm text-sm font-medium min-h-[44px] transition-all" 
+                className="w-full pl-8 pr-3 h-full border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white shadow-sm text-xs sm:text-sm font-medium transition-all" 
               />
-            </div>
-            <div className="flex items-center gap-2 h-full shrink-0 justify-between sm:justify-start">
-              <button 
-                onClick={() => setIsAddModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl flex items-center justify-center transition-colors shadow-sm font-bold text-sm min-h-[44px] h-full flex-1 sm:flex-none"
-              >
-                <Plus className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2" />
-                <span className="hidden sm:inline">Add App</span>
-              </button>
-              <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm min-h-[44px] h-full shrink-0">
-                <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
-                <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
-              </div>
             </div>
           </div>
         </div>

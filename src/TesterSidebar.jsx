@@ -26,11 +26,11 @@ export default function TesterSidebar({ activeTab, setActiveTab, isOpen, setIsOp
       {/* Sidebar Shell */}
       <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-white flex flex-col md:static md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-slate-100 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         
-        <div className="h-20 flex items-center justify-between px-8 border-b border-slate-100/60">
-          <div className="flex items-center py-2">
-             <img src="/logo.jpg" alt="JitTest Logo" className="h-10 w-auto object-contain rounded-lg" />
+        <div className="h-14 sm:h-16 flex items-center justify-between px-6 sm:px-8 border-b border-slate-100/60">
+          <div className="flex items-center">
+             <img src="/logo.jpg" alt="JitTest Logo" className="h-8 sm:h-9 w-auto object-contain rounded-lg" />
           </div>
-          <button onClick={() => setIsOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600 bg-slate-50 p-2 rounded-full transition-colors">
+          <button onClick={() => setIsOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600 bg-slate-50 p-1.5 rounded-full transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
