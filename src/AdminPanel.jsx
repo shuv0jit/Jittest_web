@@ -18,6 +18,20 @@ export default function AdminPanel() {
   const [pendingWithdrawalsCount, setPendingWithdrawalsCount] = useState(0);
   const { logout } = useAuth();
 
+  // Calculate how many notifications haven't been read yet
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Automatically mark all notifications as read when visiting the notifications tab
+  useEffect(() => {
+    if (activeTab === 'notifications' && unreadCount > 0) {
+      notifications.forEach(n => {
+        if (!n.read) {
+          updateDoc(doc(db, 'notifications', n.id), { read: true }).catch(() => {});
+        }
+      });
+    }
+  }, [activeTab, notifications, unreadCount]);
+
   useEffect(() => {
     // Fetch Notifications for Bell Icon
     const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'));
@@ -132,7 +146,7 @@ export default function AdminPanel() {
           <div className="flex items-center gap-3 sm:gap-4">
             <button onClick={() => setActiveTab('notifications')} className="relative p-2.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
               <Bell className="w-6 h-6" />
-              {notifications.length > 0 && (
+              {unreadCount > 0 && (
                 <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
               )}
             </button>

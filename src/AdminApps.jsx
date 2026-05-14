@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, getDocs, doc, addDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, increment, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Plus, Trash2, Edit, DollarSign, Undo, Image as ImageIcon, X, LayoutGrid, List, Users, Download, Clock, CheckCircle, CreditCard } from 'lucide-react';
+import { Plus, Trash2, Edit, DollarSign, Undo, Image as ImageIcon, X, LayoutGrid, List, Users, Download, Clock, CheckCircle, CreditCard, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminApps() {
@@ -10,6 +10,7 @@ export default function AdminApps() {
   const [testers, setTesters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Ongoing');
+  const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -292,7 +293,11 @@ export default function AdminApps() {
     });
   };
 
-  const currentApps = filterApps(activeTab);
+  const currentApps = filterApps(activeTab).filter(app => {
+    if (!searchQuery) return true;
+    const lowerQ = searchQuery.toLowerCase();
+    return (app.finalAppName?.toLowerCase().includes(lowerQ) || app.pNameStr?.toLowerCase().includes(lowerQ));
+  });
 
   // Framer Motion Variants
   const containerVariants = {
@@ -309,8 +314,8 @@ export default function AdminApps() {
       
       {/* Header and Sub Tabs */}
       <div className="mb-6">
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide flex-1">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide flex-1 min-w-0">
             {[
               { id: 'To Install', label: 'To Install', icon: Download },
               { id: 'Ongoing', label: 'Closed Testing', icon: Clock },
@@ -338,17 +343,30 @@ export default function AdminApps() {
               );
             })}
           </div>
-          <div className="flex items-center gap-2 h-full shrink-0 ml-auto sm:ml-0">
-            <button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl flex items-center justify-center transition-colors shadow-sm font-bold text-sm min-h-[44px] h-full"
-            >
-              <Plus className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2" />
-              <span className="hidden sm:inline">Add App</span>
-            </button>
-            <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm min-h-[44px] h-full">
-              <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
-              <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+          
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 shrink-0">
+            <div className="relative w-full sm:w-56 lg:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input 
+                type="text" 
+                placeholder="Search apps..." 
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
+                className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white shadow-sm text-sm font-medium min-h-[44px] transition-all" 
+              />
+            </div>
+            <div className="flex items-center gap-2 h-full shrink-0 justify-between sm:justify-start">
+              <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl flex items-center justify-center transition-colors shadow-sm font-bold text-sm min-h-[44px] h-full flex-1 sm:flex-none"
+              >
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2" />
+                <span className="hidden sm:inline">Add App</span>
+              </button>
+              <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm min-h-[44px] h-full shrink-0">
+                <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+                <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+              </div>
             </div>
           </div>
         </div>

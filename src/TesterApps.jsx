@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
-import { Download, Clock, CheckCircle, CreditCard, PlaySquare, CheckCircle2, LayoutGrid, List } from 'lucide-react';
+import { Download, Clock, CheckCircle, CreditCard, PlaySquare, CheckCircle2, LayoutGrid, List, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function TesterApps() {
@@ -10,6 +10,7 @@ export default function TesterApps() {
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState('install');
+  const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid');
 
   // Real-time Firestore Listener
@@ -128,7 +129,19 @@ export default function TesterApps() {
     return <div className="flex-1 flex justify-center items-center h-full text-blue-600 font-bold animate-pulse">Synchronizing Data Pipeline...</div>;
   }
 
-  const currentApps = categorizedApps[activeSubTab] || [];
+  let currentApps = categorizedApps[activeSubTab] || [];
+
+  if (searchQuery) {
+    const lowerQ = searchQuery.toLowerCase();
+    currentApps = currentApps.filter(app => {
+      const pNameStr = typeof app.packageName === 'string' ? app.packageName : '';
+      const finalAppName = app.appName || (pNameStr ? pNameStr.split('.').pop() : 'Unknown Application');
+      return (
+        finalAppName.toLowerCase().includes(lowerQ) || 
+        pNameStr.toLowerCase().includes(lowerQ)
+      );
+    });
+  }
 
   // Framer Motion Stagger Variants
   const containerVariants = {
@@ -141,8 +154,8 @@ export default function TesterApps() {
       
       {/* Header and Sub Tabs */}
       <div className="mb-6">
-        <div className="flex justify-between items-center gap-2 sm:gap-3">
-          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide flex-1">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide flex-1 min-w-0">
           {[
             { id: 'install', label: 'To Install', icon: Download },
             { id: 'ongoing', label: 'Ongoing', icon: Clock },
@@ -169,9 +182,24 @@ export default function TesterApps() {
             );
           })}
           </div>
-          <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm shrink-0 h-full">
-            <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
-            <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+          
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 shrink-0">
+            <div className="relative w-full sm:w-56 lg:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input 
+                type="text" 
+                placeholder="Search apps..." 
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
+                className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white shadow-sm text-sm font-medium min-h-[44px] transition-all" 
+              />
+            </div>
+            <div className="flex items-center gap-2 h-full shrink-0 justify-end sm:justify-start">
+              <div className="bg-white border border-slate-100 rounded-xl flex p-1 shadow-sm shrink-0 h-full min-h-[44px]">
+                <button onClick={() => setViewMode('grid')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+                <button onClick={() => setViewMode('list')} className={`p-2 sm:p-2.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-blue-500'}`}><List className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
