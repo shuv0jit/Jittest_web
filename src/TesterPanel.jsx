@@ -26,7 +26,6 @@ export default function TesterPanel() {
     const fetchData = async () => {
       if (!currentUser) return;
       
-      console.log('[TesterPanel] Fetching profile for user:', currentUser.uid);
       // Fetch Tester Profile
       try {
         const userRef = doc(db, 'users', currentUser.uid);
@@ -34,10 +33,8 @@ export default function TesterPanel() {
         if (userSnap.exists()) {
           setTesterData(userSnap.data());
         } else {
-          console.warn('[TesterPanel] Warning: User document does not exist in database!');
         }
       } catch (error) {
-        console.error('[TesterPanel] Profile fetch failed or timed out! Reason:', error.message);
       }
     };
     fetchData();
@@ -74,7 +71,6 @@ export default function TesterPanel() {
       }
       setShowNotifBanner(false);
     } catch (error) {
-      console.error("Failed to enable notifications", error);
       setShowNotifBanner(false);
     }
   };
@@ -106,12 +102,10 @@ export default function TesterPanel() {
   // Fetch Tester Notifications
   useEffect(() => {
     if (!currentUser) return;
-    console.log('[TesterPanel] Listening for notifications...');
     const q = query(collection(db, 'testerNotifications'), where('testerId', '==', currentUser.uid));
     const unsubNotifs = onSnapshot(q, (snapshot) => {
       setNotifications(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
-      console.error('[TesterPanel] Notifications stream timed out or disconnected:', error.message);
     });
     return () => unsubNotifs();
   }, [currentUser]);
@@ -119,10 +113,8 @@ export default function TesterPanel() {
   // Real-time calculation: Total Tested Apps = Install + Ongoing + Production + Paid
   useEffect(() => {
     if (!currentUser) return;
-    console.log('[TesterPanel] Listening for apps to calculate balances...');
     const unsubApps = onSnapshot(collection(db, 'apps'), (snapshot) => {
       const allApps = snapshot.docs.map(d => d.data());
-      console.log(`[TesterPanel] Received ${allApps.length} apps. Calculating...`);
       let count = 0;
       let eligibleCount = 0;
       let pCount = 0;
@@ -163,7 +155,6 @@ export default function TesterPanel() {
       setLockedBalance(eligibleCount * 50);
       setPaidAppsCount(pCount);
     }, (error) => {
-      console.error('[TesterPanel] Apps stream timed out or disconnected:', error.message);
     });
     return () => unsubApps();
   }, [currentUser]);

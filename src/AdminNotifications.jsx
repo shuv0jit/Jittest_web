@@ -10,7 +10,6 @@ export default function AdminNotifications({ notifications, onBack }) {
     try {
       await deleteDoc(doc(db, 'notifications', id));
     } catch (error) {
-      console.error("Error deleting notification:", error);
     }
   };
 

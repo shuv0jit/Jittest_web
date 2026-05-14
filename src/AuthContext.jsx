@@ -41,7 +41,6 @@ export const AuthProvider = ({ children }) => {
             setRole('tester');
           }
         } catch (error) {
-          console.error("Error fetching user role from database:", error);
           setRole(user.email === ADMIN_EMAIL ? 'admin' : 'tester');
         }
       } else {

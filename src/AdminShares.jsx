@@ -56,7 +56,6 @@ export default function AdminShares() {
       setIsPaymentModalOpen(false);
       setPaymentAmount('');
     } catch (error) {
-      console.error("Error saving payment:", error);
       alert("Failed to release payment.");
     } finally {
       setIsSubmitting(false);

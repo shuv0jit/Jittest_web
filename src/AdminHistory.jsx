@@ -113,7 +113,6 @@ export default function AdminHistory() {
       });
       setEditingRequest(null);
     } catch (err) {
-      console.error(err);
     }
   };
 

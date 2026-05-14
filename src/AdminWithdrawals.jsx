@@ -52,7 +52,6 @@ export default function AdminWithdrawals() {
         await updateDoc(doc(db, 'withdrawRequests', req.id), { status: 'declined' });
       }
     } catch (error) {
-      console.error("Error updating status:", error);
     }
   };
 

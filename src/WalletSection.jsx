@@ -92,7 +92,6 @@ export default function WalletSection() {
         setWithdrawAmount(100);
       }, 2500);
     } catch (error) {
-      console.error('Error submitting withdrawal:', error);
     } finally {
       setIsSubmitting(false);
     }

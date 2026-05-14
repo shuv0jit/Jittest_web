@@ -113,7 +113,6 @@ export default function AdminTesters() {
 
       setEditingTester(null);
     } catch (error) {
-      console.error("Error updating balance:", error);
       setErrorMsg("Database error during update.");
     }
   };

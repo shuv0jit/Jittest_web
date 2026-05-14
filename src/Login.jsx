@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Mail, Lock, Loader2, Shield } from 'lucide-react';
@@ -27,7 +27,6 @@ export default function Login() {
       await loginEmail(email, password);
     } catch (err) {
       setError('Failed to log in. Please check your credentials.');
-      console.error(err);
       setIsSubmitting(false);
     }
   };
@@ -81,6 +80,12 @@ export default function Login() {
               </div>
             </div>
             
+            <div className="flex justify-end pt-1">
+              <Link to="/forgot-password" className="text-[11px] font-bold tracking-wider text-blue-600 hover:text-blue-700 transition-colors uppercase">
+                Forgot Password?
+              </Link>
+            </div>
+
             <motion.button whileHover={{ scale: isSubmitting ? 1 : 1.02 }} whileTap={{ scale: isSubmitting ? 1 : 0.98 }} type="submit" disabled={isSubmitting} className="w-full flex justify-center items-center py-4 px-4 rounded-xl shadow-lg shadow-blue-600/20 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed mt-2">
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Secure Sign In <ArrowRight className="ml-2 w-4 h-4" /></>}
             </motion.button>
@@ -103,6 +108,13 @@ export default function Login() {
               <Shield className="w-5 h-5 mr-3 text-blue-400" />
               Admin Access
             </motion.button>
+
+            <p className="mt-8 text-center text-xs font-medium text-slate-500">
+              Don't have an account?{' '}
+              <Link to="/register" className="font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                Register here
+              </Link>
+            </p>
           </div>
         </div>
       </motion.div>

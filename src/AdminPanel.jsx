@@ -67,7 +67,6 @@ export default function AdminPanel() {
           }
         });
       } catch (error) {
-        console.error("Error checking apps for notifications:", error);
       }
     };
     checkAppsForNotifications();
