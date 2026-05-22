@@ -18,6 +18,11 @@ export default function AdminPanel() {
   const [pendingWithdrawalsCount, setPendingWithdrawalsCount] = useState(0);
   const { logout } = useAuth();
 
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchEndX, setTouchEndX] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(null);
+  const [touchEndY, setTouchEndY] = useState(null);
+
   // Calculate how many notifications haven't been read yet
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -90,8 +95,35 @@ export default function AdminPanel() {
     };
   }, []);
 
+  const handleTouchStart = (e) => {
+    setTouchEndX(null);
+    setTouchEndY(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
+    const distanceX = touchStartX - touchEndX;
+    const distanceY = touchStartY - touchEndY;
+
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      if (distanceX < -50 && touchStartX < 50) {
+        setIsSidebarOpen(true);
+      }
+      if (distanceX > 50 && isSidebarOpen) {
+        setIsSidebarOpen(false);
+      }
+    }
+  };
+
   return (
-    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
+    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
@@ -100,8 +132,10 @@ export default function AdminPanel() {
         )}
       </AnimatePresence>
 
-      {/* Futuristic Sidebar */}
-      <div className={`fixed inset-y-0 left-0 w-[260px] bg-white text-slate-600 border-r border-slate-100 flex flex-col z-[70] shadow-2xl transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Futuristic Sidebar (Mobile sliding) */}
+      <div
+        className={`fixed inset-y-0 left-0 w-[260px] bg-white text-slate-600 border-r border-slate-100 flex flex-col z-[70] shadow-2xl md:relative transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+      >
         <div className="p-4 sm:p-5 h-14 sm:h-16 flex items-center justify-between border-b border-slate-100 shrink-0">
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex items-center mx-auto md:mx-0">
              <img src="/logo.jpg" alt="JitTest Logo" className="h-8 sm:h-9 w-auto object-contain rounded-lg" />

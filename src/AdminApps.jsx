@@ -24,6 +24,11 @@ export default function AdminApps() {
   const [editStartTime, setEditStartTime] = useState('');
   const [editAppOwner, setEditAppOwner] = useState('dont know yet');
 
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchEndX, setTouchEndX] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(null);
+  const [touchEndY, setTouchEndY] = useState(null);
+
   // Form State
   const [appLink, setAppLink] = useState('');
   const [packageName, setPackageName] = useState('');
@@ -131,7 +136,10 @@ export default function AdminApps() {
       const testerIds = app?.testerIds || [];
 
       // Toggle the isPaidByAdmin flag
-      await updateDoc(doc(db, 'apps', appId), { isPaidByAdmin: isPaying });
+      await updateDoc(doc(db, 'apps', appId), { 
+        isPaidByAdmin: isPaying,
+        paidAt: isPaying ? serverTimestamp() : null
+      });
 
       // Only update the withdrawable balance for testers who ACTUALLY installed this app!
       if (testerIds.length > 0) {
@@ -233,7 +241,7 @@ export default function AdminApps() {
         // Auto-start timer if admin manually pushes installs to 12+ but leaves Day Count at 0
         updatedData.startTime = serverTimestamp();
         updatedData.status = 'Ongoing';
-        updatedData.dayCount = 1;
+        updatedData.dayCount = 0;
       } else if (editStartTime) {
         // Update startTime based on the date picker
         const startMidnight = new Date(editStartTime);
@@ -265,7 +273,7 @@ export default function AdminApps() {
         startMidnight.setHours(0, 0, 0, 0);
         const nowMidnight = new Date();
         nowMidnight.setHours(0, 0, 0, 0);
-        daysActive = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        daysActive = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24));
       }
     }
     // Connected Socket Math: Ensure display count never exceeds total live testers
@@ -285,7 +293,7 @@ export default function AdminApps() {
       const isToInstall = !app.isPaidByAdmin && app.displayTesterCount < 12;
       if (statusFilter === 'To Install') return isToInstall;
 
-      const isReviews = app.status === 'Reviews' || app.status === 'production_access' || app.daysActive > 14;
+      const isReviews = app.status === 'Reviews' || app.status === 'production_access' || app.daysActive >= 15;
       if (statusFilter === 'Reviews') return !app.isPaidByAdmin && !isToInstall && isReviews;
       
       if (statusFilter === 'Ongoing') return !app.isPaidByAdmin && !isToInstall && !isReviews;
@@ -299,6 +307,17 @@ export default function AdminApps() {
     return (app.finalAppName?.toLowerCase().includes(lowerQ) || app.pNameStr?.toLowerCase().includes(lowerQ));
   });
 
+  currentApps.sort((a, b) => {
+    if (activeTab === 'Ongoing') {
+      return b.daysActive - a.daysActive;
+    } else if (activeTab === 'Reviews') {
+      return (b.startTime?.toDate?.() || 0) - (a.startTime?.toDate?.() || 0);
+    } else if (activeTab === 'Paid') {
+      return (b.paidAt?.toDate?.() || 0) - (a.paidAt?.toDate?.() || 0);
+    }
+    return 0;
+  });
+
   // Framer Motion Variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -309,8 +328,35 @@ export default function AdminApps() {
     show: { opacity: 1, y: 0 }
   };
 
+  const handleTouchStart = (e) => {
+    setTouchEndX(null);
+    setTouchEndY(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
+    const distanceX = touchStartX - touchEndX;
+    const distanceY = touchStartY - touchEndY;
+
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      if (distanceX < -50 && touchStartX < 50) return;
+      const tabs = ['To Install', 'Ongoing', 'Reviews', 'Paid'];
+      const currentIndex = tabs.indexOf(activeTab);
+
+      if (distanceX > 50 && currentIndex < tabs.length - 1) setActiveTab(tabs[currentIndex + 1]);
+      if (distanceX < -50 && currentIndex > 0) setActiveTab(tabs[currentIndex - 1]);
+    }
+  };
+
   return (
-    <div className="flex flex-col max-w-7xl mx-auto w-full h-full">
+    <div className="flex flex-col max-w-7xl mx-auto w-full h-full" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       
       {/* Header and Sub Tabs */}
       <div className="mb-4 sm:mb-5">
@@ -613,7 +659,7 @@ export default function AdminApps() {
                       setEditDayCount(days);
                       if (days > 0) {
                         const newStartTime = new Date();
-                        newStartTime.setDate(newStartTime.getDate() - (days - 1));
+                        newStartTime.setDate(newStartTime.getDate() - days);
                         const year = newStartTime.getFullYear();
                         const month = String(newStartTime.getMonth() + 1).padStart(2, '0');
                         const day = String(newStartTime.getDate()).padStart(2, '0');

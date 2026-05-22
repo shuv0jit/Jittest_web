@@ -23,9 +23,10 @@ export default function TesterSidebar({ activeTab, setActiveTab, isOpen, setIsOp
         )}
       </AnimatePresence>
 
-      {/* Sidebar Shell */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-white flex flex-col md:static md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-slate-100 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        
+      {/* Sidebar Shell (Mobile sliding) */}
+      <div
+        className={`fixed inset-y-0 left-0 w-[260px] bg-white text-slate-600 border-r border-slate-100 flex flex-col z-[70] shadow-2xl md:relative transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+      >
         <div className="h-14 sm:h-16 flex items-center justify-between px-6 sm:px-8 border-b border-slate-100/60">
           <div className="flex items-center">
              <img src="/logo.jpg" alt="JitTest Logo" className="h-8 sm:h-9 w-auto object-contain rounded-lg" />

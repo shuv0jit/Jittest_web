@@ -13,6 +13,11 @@ export default function TesterApps() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid');
 
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchEndX, setTouchEndX] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(null);
+  const [touchEndY, setTouchEndY] = useState(null);
+
   // Real-time Firestore Listener
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'apps'), (snapshot) => {
@@ -49,7 +54,7 @@ export default function TesterApps() {
           startMidnight.setHours(0, 0, 0, 0);
           const nowMidnight = new Date();
           nowMidnight.setHours(0, 0, 0, 0);
-          daysActive = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          daysActive = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24));
         }
       }
       const appWithDays = { ...app, daysActive };
@@ -68,7 +73,7 @@ export default function TesterApps() {
       // STEP 2: Only after Step 1, evaluate 'production_access' logic
       if (appWithDays.status === 'production_access' || appWithDays.status === 'Reviews') {
         if (hasTested) {
-          if (daysActive > 14) {
+          if (daysActive >= 15) {
             categorizedApps.production.push(appWithDays);
           } else {
             categorizedApps.ongoing.push(appWithDays);
@@ -83,7 +88,11 @@ export default function TesterApps() {
       if (!hasTested) {
         categorizedApps.install.push(appWithDays);
       } else {
-        categorizedApps.ongoing.push(appWithDays);
+        if (daysActive >= 15) {
+          categorizedApps.production.push(appWithDays);
+        } else {
+          categorizedApps.ongoing.push(appWithDays);
+        }
       }
     } catch (err) {
       // Silently ignore to prevent render crashes
@@ -109,7 +118,7 @@ export default function TesterApps() {
       if (newCount >= 12 && !app.startTime) {
         updates.startTime = serverTimestamp();
         updates.status = 'Ongoing';
-        updates.dayCount = 1;
+        updates.dayCount = 0;
       }
 
       await updateDoc(appRef, updates);
@@ -143,14 +152,52 @@ export default function TesterApps() {
     });
   }
 
+  currentApps.sort((a, b) => {
+    if (activeSubTab === 'ongoing') {
+      return b.daysActive - a.daysActive;
+    } else if (activeSubTab === 'production') {
+      return (b.startTime?.toDate?.() || 0) - (a.startTime?.toDate?.() || 0);
+    } else if (activeSubTab === 'paid') {
+      return (b.paidAt?.toDate?.() || 0) - (a.paidAt?.toDate?.() || 0);
+    }
+    return 0;
+  });
+
   // Framer Motion Stagger Variants
   const containerVariants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.1 } }
   };
 
+  const handleTouchStart = (e) => {
+    setTouchEndX(null);
+    setTouchEndY(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
+    const distanceX = touchStartX - touchEndX;
+    const distanceY = touchStartY - touchEndY;
+
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      if (distanceX < -50 && touchStartX < 50) return;
+      const tabs = ['install', 'ongoing', 'production', 'paid'];
+      const currentIndex = tabs.indexOf(activeSubTab);
+
+      if (distanceX > 50 && currentIndex < tabs.length - 1) setActiveSubTab(tabs[currentIndex + 1]);
+      if (distanceX < -50 && currentIndex > 0) setActiveSubTab(tabs[currentIndex - 1]);
+    }
+  };
+
   return (
-    <div className="flex flex-col max-w-7xl mx-auto w-full h-full">
+    <div className="flex flex-col max-w-7xl mx-auto w-full h-full" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       
       {/* Header and Sub Tabs */}
       <div className="mb-4 sm:mb-5">

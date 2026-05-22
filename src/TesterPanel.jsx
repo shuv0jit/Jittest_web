@@ -22,6 +22,11 @@ export default function TesterPanel() {
   const [notifications, setNotifications] = useState([]);
   const [showNotifBanner, setShowNotifBanner] = useState(false);
 
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchEndX, setTouchEndX] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(null);
+  const [touchEndY, setTouchEndY] = useState(null);
+
   // Calculate how many notifications haven't been read yet
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -253,13 +258,46 @@ export default function TesterPanel() {
     }
   };
 
+  const handleTouchStart = (e) => {
+    setTouchEndX(null);
+    setTouchEndY(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
+    const distanceX = touchStartX - touchEndX;
+    const distanceY = touchStartY - touchEndY;
+
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      if (distanceX < -50 && touchStartX < 50) {
+        setIsSidebarOpen(true);
+      }
+      if (distanceX > 50 && isSidebarOpen) {
+        setIsSidebarOpen(false);
+      }
+    }
+  };
+
   return (
-    <div className="flex h-screen bg-slate-50/80 font-sans overflow-hidden">
+    <div className="flex h-screen bg-slate-50/80 font-sans overflow-hidden" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       
       <TesterSidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
+      <motion.div
+        initial={{ x: 0 }}
+        animate={{ x: 0 }}
+        // We keep the CSS transition for desktop, framer-motion for mobile overlay/sidebar if it's open.
+        // The main content itself does not slide, but its children will.
+        className="flex-1 flex flex-col relative z-10 overflow-hidden"
+      >
         <header className="h-14 sm:h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 sm:px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 shrink-0">
           <div className="flex items-center">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden mr-3 p-1.5 text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
@@ -309,7 +347,7 @@ export default function TesterPanel() {
         <main className="flex-1 overflow-auto p-4 sm:p-6">
           {renderContent()}
         </main>
-      </div>
+      </motion.div>
     </div>
   );
 }
