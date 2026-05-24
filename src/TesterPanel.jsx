@@ -156,7 +156,7 @@ export default function TesterPanel() {
             continue;
           }
           
-          const testerCount = Math.max(Array.isArray(app.testerIds) ? app.testerIds.length : 0, app.installedCount || 0);
+          const testerCount = Array.isArray(app.testerIds) ? app.testerIds.length : 0;
           
           // Locked Balance = Ongoing + Production Phase (Apps with 12+ testers)
           if (testerCount >= 12) {

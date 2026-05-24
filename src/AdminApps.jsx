@@ -199,7 +199,7 @@ export default function AdminApps() {
     setEditingApp(app);
     setEditPackageName(app.packageName || '');
     setEditAppName(app.appName || '');
-    setEditInstalledCount(Math.max(app.testerIds?.length || 0, app.installedCount || 0));
+    setEditInstalledCount(app.testerIds?.length || 0);
     setEditDayCount(app.daysActive || 0);
     
     if (app.startTime) {
@@ -233,7 +233,7 @@ export default function AdminApps() {
       const updatedData = {
         packageName: editPackageName,
         appName: editAppName,
-        installedCount: (editDayCount),
+        installedCount: finalInstalledCount,
         owner: editAppOwner
       };
 
@@ -277,7 +277,7 @@ export default function AdminApps() {
       }
     }
     // Connected Socket Math: Ensure display count never exceeds total live testers
-    let displayTesterCount = Math.max(Array.isArray(app.testerIds) ? app.testerIds.length : 0, app.installedCount || 0);
+    let displayTesterCount = Array.isArray(app.testerIds) ? app.testerIds.length : 0;
 
     if (testers.length > 0 && displayTesterCount > testers.length) {
       displayTesterCount = testers.length;
@@ -716,12 +716,7 @@ export default function AdminApps() {
                 const testedIds = missingTestersApp.testerIds || [];
                 const missing = testers.filter(t => !testedIds.includes(t.id));
                 
-                // Real-time verification: Adjust visual missing list if admin added manual phantom installs
-                const manualInstalls = Math.max(0, (missingTestersApp.installedCount || 0) - testedIds.length);
                 let finalMissingList = missing;
-                if (manualInstalls > 0) {
-                  finalMissingList = missing.slice(manualInstalls);
-                }
                 
                 // 2-Step Socket Verification: Installed + Missing cannot exceed total testers
                 if (missingTestersApp.displayTesterCount >= testers.length) {

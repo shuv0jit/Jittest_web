@@ -59,7 +59,7 @@ export default function TesterApps() {
       }
       const appWithDays = { ...app, daysActive };
       
-      appWithDays.displayTesterCount = Math.max(Array.isArray(appWithDays.testerIds) ? appWithDays.testerIds.length : 0, appWithDays.installedCount || 0);
+      appWithDays.displayTesterCount = Array.isArray(appWithDays.testerIds) ? appWithDays.testerIds.length : 0;
       
       // Strict Array check to prevent .includes() crashes
       const hasTested = Array.isArray(appWithDays.testerIds) ? appWithDays.testerIds.includes(currentUser.uid) : false;
@@ -106,7 +106,7 @@ export default function TesterApps() {
       const isAlreadyTester = Array.isArray(app.testerIds) && app.testerIds.includes(currentUser.uid);
       if (isAlreadyTester) return; // Prevent duplicate writes
 
-      const currentTesterCount = Math.max(Array.isArray(app.testerIds) ? app.testerIds.length : 0, app.installedCount || 0);
+      const currentTesterCount = Array.isArray(app.testerIds) ? app.testerIds.length : 0;
       const newCount = currentTesterCount + 1;
 
       const updates = {

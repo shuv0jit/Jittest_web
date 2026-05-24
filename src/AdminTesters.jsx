@@ -36,7 +36,7 @@ export default function AdminTesters() {
         if (app.isPaidByAdmin) {
           paidAppCount++;
         } else {
-          const testerCount = Math.max(app.testerIds?.length || 0, app.installedCount || 0);
+          const testerCount = app.testerIds?.length || 0;
           
           // Locked Balance = Ongoing + Production Phase (Apps with 12+ testers)
           if (testerCount >= 12) {
