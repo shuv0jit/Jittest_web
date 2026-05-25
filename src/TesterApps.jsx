@@ -289,7 +289,9 @@ const AppCard = ({ app, section, onInstallClick, viewMode }) => {
   };
 
   const handleCardClick = () => {
-    if (pNameStr) {
+    if (section === 'install') {
+      onInstallClick();
+    } else if (pNameStr) {
       window.open(`https://play.google.com/store/apps/details?id=${pNameStr}`, '_blank', 'noopener,noreferrer');
     }
   };

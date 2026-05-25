@@ -431,11 +431,15 @@ export default function AdminApps() {
         ) : (
           <motion.div variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-3"}>
               {currentApps.map((app) => (
-              <motion.div variants={itemVariants} key={app.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-3 sm:p-4 relative group flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center gap-3 sm:gap-4' : 'flex-col text-center'}`}>
+              <motion.div 
+                variants={itemVariants} 
+                key={app.id} 
+                onClick={() => window.open(`https://play.google.com/store/apps/details?id=${app.packageName}`, '_blank')}
+                className={`cursor-pointer bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-3 sm:p-4 relative group flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center gap-3 sm:gap-4' : 'flex-col text-center'}`}>
                   
                   {/* Close/Delete Button */}
                   <button 
-                    onClick={() => handleDeleteApp(app.id)}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteApp(app.id); }}
                     className="absolute top-2 right-2 sm:top-3 sm:right-3 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors z-10"
                     title="Delete App"
                   >
@@ -471,7 +475,7 @@ export default function AdminApps() {
                   {/* Actions */}
                   <div className={`flex gap-2 sm:gap-3 ${viewMode === 'list' ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0' : 'w-full mt-auto pt-2'}`}>
                     <button 
-                      onClick={() => setMissingTestersApp(app)}
+                      onClick={(e) => { e.stopPropagation(); setMissingTestersApp(app); }}
                       className="flex-1 sm:flex-none border border-amber-200 text-amber-600 bg-amber-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-amber-100 flex justify-center items-center transition-colors"
                       title="View Missing Testers"
                     >
@@ -479,7 +483,7 @@ export default function AdminApps() {
                     </button>
 
                     <button 
-                      onClick={() => handleEditClick(app)}
+                      onClick={(e) => { e.stopPropagation(); handleEditClick(app); }}
                       className="flex-1 sm:flex-none border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors"
                     >
                       <Edit className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Edit</span>
@@ -487,14 +491,14 @@ export default function AdminApps() {
                     
                     {!app.isPaidByAdmin ? (
                       <button 
-                        onClick={() => handlePayToggle(app.id, true)}
+                        onClick={(e) => { e.stopPropagation(); handlePayToggle(app.id, true); }}
                         className="flex-1 sm:flex-none bg-emerald-600 text-white py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-emerald-700 flex justify-center items-center transition-colors shadow-sm"
                       >
                         <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Pay</span>
                       </button>
                     ) : (
                       <button 
-                        onClick={() => handlePayToggle(app.id, false)}
+                        onClick={(e) => { e.stopPropagation(); handlePayToggle(app.id, false); }}
                         className="flex-1 sm:flex-none bg-red-500 text-white py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-red-600 flex justify-center items-center transition-colors shadow-sm"
                       >
                         <Undo className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Unpay</span>
