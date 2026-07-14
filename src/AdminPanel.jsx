@@ -8,11 +8,16 @@ import AdminShares from './AdminShares';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
 import { collection, onSnapshot, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { LayoutDashboard, Users, CreditCard, LogOut, Activity, History, Menu, X, Bell, Calculator } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, LogOut, History, Menu, X, Bell, Calculator, Undo, Redo } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState('apps');
+  const [history, setHistory] = useState({
+    past: [],
+    present: 'apps',
+    future: [],
+  });
+  const { present: activeTab } = history;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [pendingWithdrawalsCount, setPendingWithdrawalsCount] = useState(0);
@@ -25,6 +30,47 @@ export default function AdminPanel() {
 
   // Calculate how many notifications haven't been read yet
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // History management for Undo/Redo
+  const canUndo = history.past.length > 0;
+  const canRedo = history.future.length > 0;
+
+  const setActiveTab = (newTab) => {
+    if (newTab === history.present) {
+      return; // No change
+    }
+    setHistory(h => ({
+      past: [...h.past, h.present],
+      present: newTab,
+      future: [], // Clear future on new action
+    }));
+  };
+
+  const undo = () => {
+    if (!canUndo) return;
+    setHistory(h => {
+      const previous = h.past[h.past.length - 1];
+      const newPast = h.past.slice(0, h.past.length - 1);
+      return {
+        past: newPast,
+        present: previous,
+        future: [h.present, ...h.future],
+      };
+    });
+  };
+
+  const redo = () => {
+    if (!canRedo) return;
+    setHistory(h => {
+      const next = h.future[0];
+      const newFuture = h.future.slice(1);
+      return {
+        past: [...h.past, h.present],
+        present: next,
+        future: newFuture,
+      };
+    });
+  };
 
   // Automatically mark all notifications as read when visiting the notifications tab
   useEffect(() => {
@@ -79,7 +125,8 @@ export default function AdminPanel() {
                 title: 'Advance Payment Required',
                 message: `You have to take advance of 7 days from this app: ${app.appName || 'Unknown App'} (${app.packageName || 'Unknown Package'})`,
                 createdAt: serverTimestamp(),
-                version: 2 // Version flag to prevent future deletion
+                version: 2, // Version flag to prevent future deletion
+                owner: app.owner || ''
               });
               await updateDoc(doc(db, 'apps', appDoc.id), { advanceNotificationCreated: true });
             }
@@ -94,6 +141,23 @@ export default function AdminPanel() {
       unsubWithdrawals();
     };
   }, []);
+
+  // Keyboard shortcuts for Undo/Redo
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey) {
+        if (e.key === 'z') {
+          e.preventDefault();
+          undo();
+        } else if (e.key === 'y') {
+          e.preventDefault();
+          redo();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [canUndo, canRedo]); // Rerun effect if undo/redo ability changes
 
   const handleTouchStart = (e) => {
     setTouchEndX(null);
@@ -136,10 +200,18 @@ export default function AdminPanel() {
       <div
         className={`fixed inset-y-0 left-0 w-[260px] bg-white text-slate-600 border-r border-slate-100 flex flex-col z-[70] shadow-2xl md:relative transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
-        <div className="p-4 sm:p-5 h-14 sm:h-16 flex items-center justify-between border-b border-slate-100 shrink-0">
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex items-center mx-auto md:mx-0">
+        <div className="p-4 sm:p-5 h-14 sm:h-16 flex items-center justify-between border-b border-slate-100 shrink-0 gap-2">
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex items-center flex-1">
              <img src="/logo.jpg" alt="JitTest Logo" className="h-8 sm:h-9 w-auto object-contain rounded-lg" />
           </motion.div>
+          <div className="flex items-center gap-1">
+            <button onClick={undo} disabled={!canUndo} className="p-2 rounded-lg text-slate-400 disabled:text-slate-200 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors">
+              <Undo className="w-4 h-4" />
+            </button>
+            <button onClick={redo} disabled={!canRedo} className="p-2 rounded-lg text-slate-400 disabled:text-slate-200 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors">
+              <Redo className="w-4 h-4" />
+            </button>
+          </div>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-slate-800"><X className="w-5 h-5" /></button>
         </div>
         

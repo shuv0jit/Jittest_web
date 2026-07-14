@@ -57,6 +57,11 @@ export default function TesterApps() {
           daysActive = Math.floor(Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24));
         }
       }
+
+      // Filter out apps that are 15 days or older, unless they are already paid.
+      if (daysActive >= 15 && !app.isPaidByAdmin) {
+        continue;
+      }
       const appWithDays = { ...app, daysActive };
       
       appWithDays.displayTesterCount = Array.isArray(appWithDays.testerIds) ? appWithDays.testerIds.length : 0;

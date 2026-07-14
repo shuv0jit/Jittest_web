@@ -7,6 +7,7 @@ import { auth, db } from './src/firebase';
 
 export default function Register() {
   const navigate = useNavigate();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -33,9 +34,18 @@ export default function Register() {
 
       // 2. Save user data into the "users" collection in Firestore
       await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        name: name,
         email: user.email,
+        role: 'tester',
+        appVersion: "4.0",
         createdAt: serverTimestamp(),
-        role: 'user'
+        updatedAt: serverTimestamp(),
+        installedAppsCount: 0,
+        lastWithdrawalDate: null,
+        lockedBalance: 0,
+        totalPaidAmount: 0,
+        withdrawableBalance: 0
       });
 
       // 3. Redirect to login
@@ -70,6 +80,16 @@ export default function Register() {
 
         <form className="mt-8 space-y-6" onSubmit={handleCreateAccount}>
             <div className="space-y-4 rounded-md shadow-sm">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Email address</label>
                 <input

@@ -22,7 +22,8 @@ export default function AdminApps() {
   const [editInstalledCount, setEditInstalledCount] = useState(0);
   const [editDayCount, setEditDayCount] = useState(0);
   const [editStartTime, setEditStartTime] = useState('');
-  const [editAppOwner, setEditAppOwner] = useState('dont know yet');
+  const [editAppOwner, setEditAppOwner] = useState('');
+  const [editAppPrice, setEditAppPrice] = useState(1250);
 
   const [touchStartX, setTouchStartX] = useState(null);
   const [touchEndX, setTouchEndX] = useState(null);
@@ -33,7 +34,8 @@ export default function AdminApps() {
   const [appLink, setAppLink] = useState('');
   const [packageName, setPackageName] = useState('');
   const [appName, setAppName] = useState('');
-  const [appOwner, setAppOwner] = useState('dont know yet');
+  const [appOwner, setAppOwner] = useState('');
+  const [appPrice, setAppPrice] = useState('1250');
   const [uploading, setUploading] = useState(false);
 
   // Real-time listener for Apps
@@ -75,6 +77,7 @@ export default function AdminApps() {
         isPaidByAdmin: false,
         packageName: packageName,
         owner: appOwner,
+        price: Number(appPrice),
         paidAt: null,
         startTime: null,
         status: 'waiting',
@@ -99,7 +102,8 @@ export default function AdminApps() {
       setAppLink('');
       setPackageName('');
       setAppName('');
-      setAppOwner('dont know yet');
+      setAppOwner('');
+      setAppPrice('1250');
     } catch (error) {
       alert("Failed to add app.");
     } finally {
@@ -118,6 +122,18 @@ export default function AdminApps() {
       setPackageName(id);
       const parts = id.split('.');
       setAppName(parts.length >= 3 ? parts[2] : parts[parts.length - 1]);
+    }
+  };
+
+  // Auto-extract app name from package name on manual entry
+  const handlePackageNameChange = (e) => {
+    const newPackageName = e.target.value;
+    setPackageName(newPackageName);
+
+    // Only auto-fill app name if it's currently empty
+    if (!appName && newPackageName.includes('.')) {
+      const parts = newPackageName.split('.');
+      setAppName(parts[parts.length - 1]);
     }
   };
 
@@ -217,6 +233,7 @@ export default function AdminApps() {
     }
 
     setEditAppOwner(app.owner || 'dont know yet');
+    setEditAppPrice(app.price || 1250);
     setIsEditModalOpen(true);
   };
 
@@ -233,8 +250,8 @@ export default function AdminApps() {
       const updatedData = {
         packageName: editPackageName,
         appName: editAppName,
-        installedCount: finalInstalledCount,
-        owner: editAppOwner
+        owner: editAppOwner,
+        price: Number(editAppPrice)
       };
 
       if (Number(editInstalledCount) >= 12 && Number(editDayCount) === 0 && !editStartTime) {
@@ -304,7 +321,11 @@ export default function AdminApps() {
   const currentApps = filterApps(activeTab).filter(app => {
     if (!searchQuery) return true;
     const lowerQ = searchQuery.toLowerCase();
-    return (app.finalAppName?.toLowerCase().includes(lowerQ) || app.pNameStr?.toLowerCase().includes(lowerQ));
+    return (
+      app.finalAppName?.toLowerCase().includes(lowerQ) || 
+      app.pNameStr?.toLowerCase().includes(lowerQ) ||
+      app.owner?.toLowerCase().includes(lowerQ)
+    );
   });
 
   currentApps.sort((a, b) => {
@@ -457,6 +478,12 @@ export default function AdminApps() {
                     <div className="flex-1 overflow-hidden w-full">
                       <h3 className="font-bold text-gray-900 truncate text-sm sm:text-base" title={app.finalAppName}>{app.finalAppName}</h3>
                       <p className="text-[9px] sm:text-[11px] text-gray-500 truncate mt-0.5 font-medium" title={app.pNameStr}>{app.pNameStr}</p>
+                      {app.owner && (
+                        <p className="text-[9px] sm:text-[10px] text-blue-500 truncate mt-1 font-semibold capitalize" title={`Owner: ${app.owner}`}>
+                          {app.owner}
+                        </p>
+                      )}
+                      
                     </div>
                   </div>
 
@@ -553,27 +580,36 @@ export default function AdminApps() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Package Name *</label>
-                <input 
-                  type="text" 
-                  required 
+                <input
+                  type="text"
+                  required
                   value={packageName}
-                  onChange={(e) => setPackageName(e.target.value)}
+                  onChange={handlePackageNameChange}
                   placeholder="com.example.app"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">App Owner *</label>
-                <select 
-                  value={appOwner} 
-                  onChange={(e) => setAppOwner(e.target.value)} 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
-                >
-                  <option value="dont know yet">Don't know yet</option>
-                  <option value="shuvojit">Shuvojit</option>
-                  <option value="nobojit">Nobojit</option>
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-1">App Owner (Name or Phone)</label>
+                <input
+                  type="text"
+                  value={appOwner}
+                  onChange={(e) => setAppOwner(e.target.value)}
+                  placeholder="e.g. Shuvojit or 017..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price (TK)</label>
+                <input
+                  type="number"
+                  value={appPrice}
+                  onChange={(e) => setAppPrice(e.target.value)}
+                  placeholder="1250"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                />
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
@@ -657,7 +693,7 @@ export default function AdminApps() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Day Count</label>
                   <input 
-                    type="number" required min="0" max="14" value={editDayCount}
+                    type="number" required min="0" value={editDayCount}
                     onChange={(e) => {
                       const days = Number(e.target.value);
                       setEditDayCount(days);
@@ -678,16 +714,25 @@ export default function AdminApps() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">App Owner</label>
-                <select 
-                  value={editAppOwner} 
-                  onChange={(e) => setEditAppOwner(e.target.value)} 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
-                >
-                  <option value="dont know yet">Don't know yet</option>
-                  <option value="shuvojit">Shuvojit</option>
-                  <option value="nobojit">Nobojit</option>
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-1">App Owner (Name or Phone)</label>
+                <input
+                  type="text"
+                  value={editAppOwner}
+                  onChange={(e) => setEditAppOwner(e.target.value)}
+                  placeholder="e.g. Shuvojit or 017..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price (TK)</label>
+                <input
+                  type="number"
+                  required
+                  value={editAppPrice}
+                  onChange={(e) => setEditAppPrice(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                />
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
