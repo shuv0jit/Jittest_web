@@ -58,10 +58,15 @@ export default function WithdrawalHistory({ lockedBalance, paidAppsCount }) {
     return () => unsubHistory();
   }, [currentUser]);
 
-  // Strict Business Rule: paid apps (isPaidByAdmin) x 50 = y; y - withdrawable = total withdrawn
+  // Strict Business Rule:
+  // 1. Get the withdrawable balance directly from the user's database record.
   const withdrawableFromDB = userData.withdrawableBalance || 0;
-  const y = paidAppsCount * 50;
-  const totalWithdrawn = Math.max(0, y - withdrawableFromDB);
+
+  // 2. Calculate the total amount the user *should have* received from paid apps.
+  const totalPotentialFromPaid = paidAppsCount * 50;
+
+  // 3. The total amount they have actually withdrawn is the difference.
+  const totalWithdrawn = Math.max(0, totalPotentialFromPaid - withdrawableFromDB);
 
   const handleWithdrawSubmit = async (e) => {
     e.preventDefault();

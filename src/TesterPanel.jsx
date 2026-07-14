@@ -135,44 +135,42 @@ export default function TesterPanel() {
     const unsubApps = onSnapshot(collection(db, 'apps'), (snapshot) => {
       const allApps = snapshot.docs.map(d => d.data());
       let count = 0;
-      let eligibleCount = 0;
+      let withdrawableAppCountForTester = 0;
+      let lockedAppCountForTester = 0;
       let pCount = 0;
 
       for (const app of allApps) {
         try {
           const pName = typeof app.packageName === 'string' ? app.packageName.trim() : '';
           const aName = typeof app.appName === 'string' ? app.appName.trim() : '';
-          
-          // Skip apps without a valid name or package (do not count them anywhere)
           if (!pName || !aName) {
             continue;
           }
 
           const hasTested = Array.isArray(app.testerIds) ? app.testerIds.includes(currentUser.uid) : false;
-
-          if (app.isPaidByAdmin) {
-            count++;
-            pCount++; // Count all apps directly sent to paid section
-            continue;
-          }
-          
-          const testerCount = Array.isArray(app.testerIds) ? app.testerIds.length : 0;
-          
-          // Locked Balance = Ongoing + Production Phase (Apps with 12+ testers)
-          if (testerCount >= 12) {
-            count++;
-            eligibleCount++;
-            continue;
-          }
-          
+          if (!hasTested) continue; // If the user hasn't tested it, it can't contribute to their balance.
           count++;
-        } catch(err) {
-          // Silently ignore to prevent render crashes
-        }
+          
+          if (app.isPaidByAdmin) {
+            // This app contributes to the user's withdrawable balance.
+            withdrawableAppCountForTester++;
+            pCount++; // Also counts for the "Paid Apps" display stat.
+          } else {
+            // If not paid, check if it's locked.
+            const testerCount = Array.isArray(app.testerIds) ? app.testerIds.length : 0;
+            if (testerCount >= 12) {
+              lockedAppCountForTester++;
+            }
+          }
+        } catch(err) {}
       }
       setTotalTestedCount(count);
-      setLockedBalance(eligibleCount * 50);
+      setLockedBalance(lockedAppCountForTester * 50);
       setPaidAppsCount(pCount);
+
+      // Dynamically set the withdrawable balance in the database.
+      const newWithdrawable = withdrawableAppCountForTester * 50;
+      updateDoc(doc(db, 'users', currentUser.uid), { withdrawableBalance: newWithdrawable });
     }, (error) => {
     });
     return () => unsubApps();
