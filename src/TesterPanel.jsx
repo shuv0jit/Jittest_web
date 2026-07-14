@@ -132,45 +132,51 @@ export default function TesterPanel() {
   // Real-time calculation: Total Tested Apps = Install + Ongoing + Production + Paid
   useEffect(() => {
     if (!currentUser) return;
-    const unsubApps = onSnapshot(collection(db, 'apps'), (snapshot) => {
+    const unsubApps = onSnapshot(collection(db, 'apps'), async (snapshot) => {
       const allApps = snapshot.docs.map(d => d.data());
-      let count = 0;
-      let withdrawableAppCountForTester = 0;
+      let totalTestedCountForTester = 0;
       let lockedAppCountForTester = 0;
-      let pCount = 0;
+      let personalPaidAppsCount = 0;
+      let globalPaidAppsCount = 0;
 
       for (const app of allApps) {
         try {
           const pName = typeof app.packageName === 'string' ? app.packageName.trim() : '';
           const aName = typeof app.appName === 'string' ? app.appName.trim() : '';
-          if (!pName || !aName) {
-            continue;
-          }
+          if (!pName || !aName) continue;
+
+          if (app.isPaidByAdmin) globalPaidAppsCount++;
 
           const hasTested = Array.isArray(app.testerIds) ? app.testerIds.includes(currentUser.uid) : false;
           if (!hasTested) continue; // If the user hasn't tested it, it can't contribute to their balance.
-          count++;
+          totalTestedCountForTester++;
           
           if (app.isPaidByAdmin) {
-            // This app contributes to the user's withdrawable balance.
-            withdrawableAppCountForTester++;
-            pCount++; // Also counts for the "Paid Apps" display stat.
+            personalPaidAppsCount++;
           } else {
-            // If not paid, check if it's locked.
+            // If not paid, check if it's "locked" (12+ testers).
             const testerCount = Array.isArray(app.testerIds) ? app.testerIds.length : 0;
-            if (testerCount >= 12) {
-              lockedAppCountForTester++;
-            }
+            if (testerCount >= 12) lockedAppCountForTester++;
           }
         } catch(err) {}
       }
-      setTotalTestedCount(count);
+      setTotalTestedCount(totalTestedCountForTester);
       setLockedBalance(lockedAppCountForTester * 50);
-      setPaidAppsCount(pCount);
+      setPaidAppsCount(personalPaidAppsCount);
 
-      // Dynamically set the withdrawable balance in the database.
-      const newWithdrawable = withdrawableAppCountForTester * 50;
-      updateDoc(doc(db, 'users', currentUser.uid), { withdrawableBalance: newWithdrawable });
+      // New Logic: Calculate withdrawable balance based on total potential earnings minus what's already been paid.
+      try {
+        const totalPotentialFromPaid = globalPaidAppsCount * 50; // Use GLOBAL count for X
+
+        // We need the most current `totalPaidAmount` to do the math.
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        const totalAlreadyPaid = userDocSnap.exists() ? (userDocSnap.data().totalPaidAmount || 0) : 0;
+
+        // The final calculation as per your rule.
+        const newWithdrawable = Math.max(0, totalPotentialFromPaid - totalAlreadyPaid);
+        await updateDoc(userDocRef, { withdrawableBalance: newWithdrawable });
+      } catch (error) {}
     }, (error) => {
     });
     return () => unsubApps();
@@ -185,7 +191,7 @@ export default function TesterPanel() {
       }
 
       case 'wallet':
-        return <WithdrawalHistory lockedBalance={lockedBalance} paidAppsCount={paidAppsCount} />;
+        return <WithdrawalHistory lockedBalance={lockedBalance} />;
 
       case 'notifications':
         return <TesterNotifications notifications={notifications} onBack={() => setActiveTab('apps')} />;

@@ -296,9 +296,10 @@ const AppCard = ({ app, section, onInstallClick, viewMode }) => {
   };
 
   const handleCardClick = () => {
-    if (section === 'install') {
+    // Only trigger the install action if the app is in the "install" or "ongoing" sections.
+    if (section === 'install' || section === 'ongoing') {
       onInstallClick();
-    } else if (pNameStr) {
+    } else if (pNameStr) { // For "production" and "paid", just open the link.
       window.open(`https://play.google.com/store/apps/details?id=${pNameStr}`, '_blank', 'noopener,noreferrer');
     }
   };

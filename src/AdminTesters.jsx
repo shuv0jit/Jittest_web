@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 
 export default function AdminTesters() {
   const [testers, setTesters] = useState([]);
+  const [allApps, setAllApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingTester, setEditingTester] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -24,15 +25,16 @@ export default function AdminTesters() {
   // Fetch global app stats to calculate identical locked balance & y factor
   useEffect(() => {
     const unsubApps = onSnapshot(collection(db, 'apps'), (snapshot) => {
-      const allApps = snapshot.docs.map(d => d.data());
+      const appsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAllApps(appsData);
       let lockedAppCount = 0;
       let paidAppCount = 0;
       
-      for (const app of allApps) {
+      for (const app of appsData) {
         const pName = typeof app.packageName === 'string' ? app.packageName.trim() : '';
         const aName = typeof app.appName === 'string' ? app.appName.trim() : '';
         if (!pName || !aName) continue;
-        
+
         if (app.isPaidByAdmin) {
           paidAppCount++;
         } else {
@@ -69,10 +71,10 @@ export default function AdminTesters() {
   const openEditModal = (tester) => {
     setEditingTester(tester);
     
-    const withdrawable = tester.withdrawableBalance || 0;
-    const totalWithdrawn = Math.max(0, (globalPaidAppsCount * 50) - withdrawable);
+    const withdrawable = Math.max(0, (globalPaidAppsCount * 50) - (tester.totalPaidAmount || 0));
+    const totalWithdrawn = tester.totalPaidAmount || 0;
 
-    setEditLocked(globalLockedBalance); // Locked is globally consistent
+    setEditLocked(tester.lockedBalance || 0);
     setEditWithdrawable(withdrawable);
     setEditTotalWithdrawn(totalWithdrawn);
     setErrorMsg('');
@@ -145,10 +147,14 @@ export default function AdminTesters() {
           {testers.map((tester) => {
             const activeToday = isTestedToday(tester.lastGoalMetDate);
             
-            // Dynamically Calculate Financials for this tester
-            const withdrawable = tester.withdrawableBalance || 0;
-            const yAmount = globalPaidAppsCount * 50;
-            const calculatedTotalWithdrawn = Math.max(0, yAmount - withdrawable);
+            // Calculate locked balance PER TESTER based on the new logic
+            const lockedAppCountForTester = allApps.filter(app => {
+              const testerCount = app.testerIds?.length || 0;
+              const hasTested = app.testerIds?.includes(tester.id);
+              // App is "locked" for this tester if it's not paid, has 12+ testers, and they installed it.
+              return !app.isPaidByAdmin && testerCount >= 12 && hasTested;
+            }).length;
+            const lockedBalanceForTester = lockedAppCountForTester * 50;
             
             return (
               <motion.div variants={itemVariants} key={tester.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-3 sm:p-4 relative group flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center gap-3 sm:gap-4' : 'flex-col text-center'}`}>
@@ -172,15 +178,15 @@ export default function AdminTesters() {
                 <div className={`grid grid-cols-3 gap-2 w-full ${viewMode === 'grid' ? 'my-3' : 'mt-3 sm:mt-0 sm:w-[280px] shrink-0'}`}>
                   <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
                     <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Locked</span>
-                    <span className="font-bold text-blue-900 text-xs sm:text-sm">{globalLockedBalance}</span>
+                    <span className="font-bold text-blue-900 text-xs sm:text-sm">{lockedBalanceForTester}</span>
                   </div>
                   <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
-                    <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Withdrawn</span>
-                    <span className="font-bold text-emerald-600 text-xs sm:text-sm">{withdrawable}</span>
+                    <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Withdrawable</span>
+                    <span className="font-bold text-emerald-600 text-xs sm:text-sm">{Math.max(0, (globalPaidAppsCount * 50) - (tester.totalPaidAmount || 0))}</span>
                   </div>
                   <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
                     <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Paid</span>
-                    <span className="font-bold text-blue-600 text-xs sm:text-sm">{calculatedTotalWithdrawn}</span>
+                    <span className="font-bold text-blue-600 text-xs sm:text-sm">{tester.totalPaidAmount || 0}</span>
                   </div>
                 </div>
 

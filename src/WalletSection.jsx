@@ -28,13 +28,18 @@ export default function WalletSection() {
   // 2. Real-time Locked Balance Calculation (Active Apps * 50)
   useEffect(() => {
     if (!currentUser) return;
-    const q = query(collection(db, 'apps'), where('testerIds', 'array-contains', currentUser.uid));
-    const unsubApps = onSnapshot(q, (snapshot) => {
-      const activeApps = snapshot.docs
-        .map(d => d.data())
-        .filter(app => app.status !== 'Paid' && app.status !== 'completed' && app.status !== 'Completed');
-      
-      setLockedBalance(activeApps.length * 50);
+    // Listen to all apps to correctly calculate locked balance
+    const unsubApps = onSnapshot(collection(db, 'apps'), (snapshot) => {
+      let lockedAppCount = 0;
+      snapshot.forEach(doc => {
+        const app = doc.data();
+        const hasTested = app.testerIds?.includes(currentUser.uid);
+        const testerCount = app.testerIds?.length || 0;
+        if (!app.isPaidByAdmin && testerCount >= 12 && hasTested) {
+          lockedAppCount++;
+        }
+      });
+      setLockedBalance(lockedAppCount * 50);
     });
     return () => unsubApps();
   }, [currentUser]);

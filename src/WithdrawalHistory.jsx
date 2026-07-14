@@ -3,12 +3,13 @@ import { db } from './firebase';
 import { collection, query, where, onSnapshot, addDoc, doc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { Wallet, Clock, CheckCircle2, ArrowRight, ShieldCheck, X, Info, Lock } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion'; 
 
-export default function WithdrawalHistory({ lockedBalance, paidAppsCount }) {
+export default function WithdrawalHistory({ lockedBalance }) {
   const { currentUser } = useAuth();
   const [userData, setUserData] = useState({});
   const [history, setHistory] = useState([]);
+  const [globalPaidAppsCount, setGlobalPaidAppsCount] = useState(0);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState(100);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
@@ -24,6 +25,21 @@ export default function WithdrawalHistory({ lockedBalance, paidAppsCount }) {
     });
     return () => unsubUser();
   }, [currentUser]);
+
+  // 2. Get GLOBAL paid apps count for X amount calculation
+  useEffect(() => {
+    const unsubApps = onSnapshot(collection(db, 'apps'), (snapshot) => {
+      let paidCount = 0;
+      snapshot.forEach(doc => {
+        const app = doc.data();
+        if (app.isPaidByAdmin) {
+          paidCount++;
+        }
+      });
+      setGlobalPaidAppsCount(paidCount);
+    });
+    return () => unsubApps();
+  }, []);
 
   // 3. Real-time Withdrawals History & Cooldown Logic
   useEffect(() => {
@@ -63,7 +79,7 @@ export default function WithdrawalHistory({ lockedBalance, paidAppsCount }) {
   const withdrawableFromDB = userData.withdrawableBalance || 0;
 
   // 2. Calculate the total amount the user *should have* received from paid apps.
-  const totalPotentialFromPaid = paidAppsCount * 50;
+  const totalPotentialFromPaid = globalPaidAppsCount * 50; // Use GLOBAL count for X
 
   // 3. The total amount they have actually withdrawn is the difference.
   const totalWithdrawn = Math.max(0, totalPotentialFromPaid - withdrawableFromDB);
