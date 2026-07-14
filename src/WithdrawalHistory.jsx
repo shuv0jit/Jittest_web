@@ -9,6 +9,7 @@ export default function WithdrawalHistory({ lockedBalance }) {
   const { currentUser } = useAuth();
   const [userData, setUserData] = useState({});
   const [history, setHistory] = useState([]);
+  const [allApps, setAllApps] = useState([]);
   const [globalPaidAppsCount, setGlobalPaidAppsCount] = useState(0);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState(100);
@@ -16,6 +17,7 @@ export default function WithdrawalHistory({ lockedBalance }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const NEW_LOGIC_CUTOFF_DATE = new Date('2026-07-14T00:00:00Z');
 
   // 1. Real-time User Data (Withdrawable Balance)
   useEffect(() => {
@@ -29,6 +31,8 @@ export default function WithdrawalHistory({ lockedBalance }) {
   // 2. Get GLOBAL paid apps count for X amount calculation
   useEffect(() => {
     const unsubApps = onSnapshot(collection(db, 'apps'), (snapshot) => {
+      const appsData = snapshot.docs.map(d => d.data());
+      setAllApps(appsData);
       let paidCount = 0;
       snapshot.forEach(doc => {
         const app = doc.data();
@@ -78,11 +82,21 @@ export default function WithdrawalHistory({ lockedBalance }) {
   // 1. Get the withdrawable balance directly from the user's database record.
   const withdrawableFromDB = userData.withdrawableBalance || 0;
 
-  // 2. Calculate the total amount the user *should have* received from paid apps.
-  const totalPotentialFromPaid = globalPaidAppsCount * 50; // Use GLOBAL count for X
+  // 2. Determine which logic to use based on registration date
+  const isNewTester = userData.createdAt?.toDate() >= NEW_LOGIC_CUTOFF_DATE;
+  let xAmount;
 
-  // 3. The total amount they have actually withdrawn is the difference.
-  const totalWithdrawn = Math.max(0, totalPotentialFromPaid - withdrawableFromDB);
+  if (isNewTester) {
+    // New Logic: Per-tester calculation
+    const paidAppsForTester = allApps.filter(app => app.isPaidByAdmin && app.testerIds?.includes(currentUser.uid)).length;
+    xAmount = paidAppsForTester * 50;
+  } else {
+    // Old Logic: Global calculation
+    xAmount = globalPaidAppsCount * 50;
+  }
+
+  // 3. The total amount they have actually withdrawn is X - withdrawable.
+  const totalWithdrawn = Math.max(0, xAmount - withdrawableFromDB);
 
   const handleWithdrawSubmit = async (e) => {
     e.preventDefault();

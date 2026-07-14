@@ -131,11 +131,10 @@ export default function AdminHistory() {
     show: { opacity: 1, y: 0 }
   };
 
-  // Calculate Total System Withdrawn dynamically across all testers (Total Paid Addition)
+  // Calculate Total System Withdrawn by summing up totalPaidAmount for all testers.
   const systemTotalWithdrawn = Object.values(usersDict).reduce((sum, user) => {
     if (user.role === 'tester') {
-      const withdrawable = user.withdrawableBalance || 0;
-      return sum + Math.max(0, (globalPaidAppsCount * 50) - withdrawable);
+      return sum + (user.totalPaidAmount || 0);
     }
     return sum;
   }, 0);

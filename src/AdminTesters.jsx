@@ -21,6 +21,7 @@ export default function AdminTesters() {
   // Global Application Stats
   const [globalLockedBalance, setGlobalLockedBalance] = useState(0);
   const [globalPaidAppsCount, setGlobalPaidAppsCount] = useState(0);
+  const NEW_LOGIC_CUTOFF_DATE = new Date('2026-07-14T00:00:00Z');
 
   // Fetch global app stats to calculate identical locked balance & y factor
   useEffect(() => {
@@ -71,8 +72,19 @@ export default function AdminTesters() {
   const openEditModal = (tester) => {
     setEditingTester(tester);
     
-    const withdrawable = Math.max(0, (globalPaidAppsCount * 50) - (tester.totalPaidAmount || 0));
     const totalWithdrawn = tester.totalPaidAmount || 0;
+    const isNewTester = tester.createdAt?.toDate() >= NEW_LOGIC_CUTOFF_DATE;
+    let withdrawable;
+
+    if (isNewTester) {
+      // New Logic: Per-tester calculation
+      const paidAppsForTester = allApps.filter(app => app.isPaidByAdmin && app.testerIds?.includes(tester.id)).length;
+      const xAmountForTester = paidAppsForTester * 50;
+      withdrawable = Math.max(0, xAmountForTester - (tester.totalPaidAmount || 0));
+    } else {
+      // Old Logic: Global calculation
+      withdrawable = Math.max(0, (globalPaidAppsCount * 50) - (tester.totalPaidAmount || 0));
+    }
 
     setEditLocked(tester.lockedBalance || 0);
     setEditWithdrawable(withdrawable);
@@ -91,7 +103,6 @@ export default function AdminTesters() {
     try {
         // Execute real DB write
         await updateDoc(doc(db, 'users', editingTester.id), {
-          lockedBalance: newLocked,
           withdrawableBalance: newWithdrawable,
           totalPaidAmount: newTotalWithdrawn
         });
@@ -101,12 +112,10 @@ export default function AdminTesters() {
           testerId: editingTester.id,
           testerName: editingTester.name,
           previousData: {
-            locked: editingTester.lockedBalance || globalLockedBalance,
             withdrawable: editingTester.withdrawableBalance || 0,
             totalPaid: editingTester.totalPaidAmount || 0
           },
           newData: {
-            locked: newLocked,
             withdrawable: newWithdrawable,
             totalPaid: newTotalWithdrawn
           },
@@ -147,6 +156,19 @@ export default function AdminTesters() {
           {testers.map((tester) => {
             const activeToday = isTestedToday(tester.lastGoalMetDate);
             
+            const isNewTester = tester.createdAt?.toDate() >= NEW_LOGIC_CUTOFF_DATE;
+
+            let withdrawableForTester;
+            if (isNewTester) {
+              // New Logic: Per-tester calculation
+              const paidAppsForTester = allApps.filter(app => app.isPaidByAdmin && app.testerIds?.includes(tester.id)).length;
+              const xAmountForTester = paidAppsForTester * 50;
+              withdrawableForTester = Math.max(0, xAmountForTester - (tester.totalPaidAmount || 0));
+            } else {
+              // Old Logic: Global calculation
+              withdrawableForTester = Math.max(0, (globalPaidAppsCount * 50) - (tester.totalPaidAmount || 0));
+            }
+
             // Calculate locked balance PER TESTER based on the new logic
             const lockedAppCountForTester = allApps.filter(app => {
               const testerCount = app.testerIds?.length || 0;
@@ -182,7 +204,7 @@ export default function AdminTesters() {
                   </div>
                   <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
                     <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Withdrawable</span>
-                    <span className="font-bold text-emerald-600 text-xs sm:text-sm">{Math.max(0, (globalPaidAppsCount * 50) - (tester.totalPaidAmount || 0))}</span>
+                    <span className="font-bold text-emerald-600 text-xs sm:text-sm">{withdrawableForTester}</span>
                   </div>
                   <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
                     <span className="text-[9px] sm:text-[10px] text-gray-500 mb-0.5 uppercase font-bold block truncate">Paid</span>

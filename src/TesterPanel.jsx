@@ -26,6 +26,7 @@ export default function TesterPanel() {
   const [touchEndX, setTouchEndX] = useState(null);
   const [touchStartY, setTouchStartY] = useState(null);
   const [touchEndY, setTouchEndY] = useState(null);
+  const NEW_LOGIC_CUTOFF_DATE = new Date('2026-07-14T00:00:00Z');
 
   // Calculate how many notifications haven't been read yet
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -135,7 +136,7 @@ export default function TesterPanel() {
     const unsubApps = onSnapshot(collection(db, 'apps'), async (snapshot) => {
       const allApps = snapshot.docs.map(d => d.data());
       let totalTestedCountForTester = 0;
-      let lockedAppCountForTester = 0;
+      let lockedAppCountForTester = 0; 
       let personalPaidAppsCount = 0;
       let globalPaidAppsCount = 0;
 
@@ -166,16 +167,26 @@ export default function TesterPanel() {
 
       // New Logic: Calculate withdrawable balance based on total potential earnings minus what's already been paid.
       try {
-        const totalPotentialFromPaid = globalPaidAppsCount * 50; // Use GLOBAL count for X
-
         // We need the most current `totalPaidAmount` to do the math.
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDocSnap = await getDoc(userDocRef);
-        const totalAlreadyPaid = userDocSnap.exists() ? (userDocSnap.data().totalPaidAmount || 0) : 0;
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          const isNewTester = userData.createdAt?.toDate() >= NEW_LOGIC_CUTOFF_DATE;
+          const totalAlreadyPaid = userData.totalPaidAmount || 0;
+          let newWithdrawable;
 
-        // The final calculation as per your rule.
-        const newWithdrawable = Math.max(0, totalPotentialFromPaid - totalAlreadyPaid);
-        await updateDoc(userDocRef, { withdrawableBalance: newWithdrawable });
+          if (isNewTester) {
+            // New Logic: Per-tester calculation
+            const xAmountForTester = personalPaidAppsCount * 50;
+            newWithdrawable = Math.max(0, xAmountForTester - totalAlreadyPaid);
+          } else {
+            // Old Logic: Global calculation
+            const xAmountGlobal = globalPaidAppsCount * 50;
+            newWithdrawable = Math.max(0, xAmountGlobal - totalAlreadyPaid);
+          }
+          await updateDoc(userDocRef, { withdrawableBalance: newWithdrawable });
+        }
       } catch (error) {}
     }, (error) => {
     });
