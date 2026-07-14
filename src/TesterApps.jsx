@@ -58,10 +58,6 @@ export default function TesterApps() {
         }
       }
 
-      // Filter out apps that are 15 days or older, unless they are already paid.
-      if (daysActive >= 15 && !app.isPaidByAdmin) {
-        continue;
-      }
       const appWithDays = { ...app, daysActive };
       
       appWithDays.displayTesterCount = Array.isArray(appWithDays.testerIds) ? appWithDays.testerIds.length : 0;
@@ -73,6 +69,12 @@ export default function TesterApps() {
       if (appWithDays.isPaidByAdmin) {
         categorizedApps.paid.push(appWithDays);
         continue; // App is assigned, immediately skip the rest of the checks
+      }
+
+      // STEP 2: Move unpaid apps that are 15+ days old to Production
+      if (daysActive >= 15 && !app.isPaidByAdmin) {
+        categorizedApps.production.push(appWithDays);
+        continue;
       }
 
       // STEP 2: Only after Step 1, evaluate 'production_access' logic
