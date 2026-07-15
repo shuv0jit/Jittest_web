@@ -78,15 +78,22 @@ export default function AdminTesters() {
 
     if (isNewTester) {
       // New Logic: Per-tester calculation
-      const paidAppsForTester = allApps.filter(app => app.isPaidByAdmin && app.testerIds?.includes(tester.id)).length;
-      const xAmountForTester = paidAppsForTester * 50;
-      withdrawable = Math.max(0, xAmountForTester - (tester.totalPaidAmount || 0));
+      const xAmountForTester = (tester.totalAppsPaid || 0) * 50;
+      withdrawable = Math.max(0, xAmountForTester - totalWithdrawn);
     } else {
       // Old Logic: Global calculation
       withdrawable = Math.max(0, (globalPaidAppsCount * 50) - (tester.totalPaidAmount || 0));
     }
 
-    setEditLocked(tester.lockedBalance || 0);
+    // Re-calculate the locked balance for this specific tester to ensure it's up-to-date, matching the card.
+    const lockedAppCountForTester = allApps.filter(app => {
+      const testerCount = app.testerIds?.length || 0;
+      const hasTested = app.testerIds?.includes(tester.id);
+      return !app.isPaidByAdmin && testerCount >= 12 && hasTested;
+    }).length;
+    const lockedBalanceForTester = lockedAppCountForTester * 50;
+
+    setEditLocked(lockedBalanceForTester);
     setEditWithdrawable(withdrawable);
     setEditTotalWithdrawn(totalWithdrawn);
     setErrorMsg('');
@@ -161,8 +168,7 @@ export default function AdminTesters() {
             let withdrawableForTester;
             if (isNewTester) {
               // New Logic: Per-tester calculation
-              const paidAppsForTester = allApps.filter(app => app.isPaidByAdmin && app.testerIds?.includes(tester.id)).length;
-              const xAmountForTester = paidAppsForTester * 50;
+              const xAmountForTester = (tester.totalAppsPaid || 0) * 50;
               withdrawableForTester = Math.max(0, xAmountForTester - (tester.totalPaidAmount || 0));
             } else {
               // Old Logic: Global calculation

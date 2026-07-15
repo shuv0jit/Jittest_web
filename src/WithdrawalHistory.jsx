@@ -82,21 +82,8 @@ export default function WithdrawalHistory({ lockedBalance }) {
   // 1. Get the withdrawable balance directly from the user's database record.
   const withdrawableFromDB = userData.withdrawableBalance || 0;
 
-  // 2. Determine which logic to use based on registration date
-  const isNewTester = userData.createdAt?.toDate() >= NEW_LOGIC_CUTOFF_DATE;
-  let xAmount;
-
-  if (isNewTester) {
-    // New Logic: Per-tester calculation
-    const paidAppsForTester = allApps.filter(app => app.isPaidByAdmin && app.testerIds?.includes(currentUser.uid)).length;
-    xAmount = paidAppsForTester * 50;
-  } else {
-    // Old Logic: Global calculation
-    xAmount = globalPaidAppsCount * 50;
-  }
-
-  // 3. The total amount they have actually withdrawn is X - withdrawable.
-  const totalWithdrawn = Math.max(0, xAmount - withdrawableFromDB);
+  // The total amount they have actually withdrawn is their totalPaidAmount.
+  const totalWithdrawn = userData.totalPaidAmount || 0;
 
   const handleWithdrawSubmit = async (e) => {
     e.preventDefault();

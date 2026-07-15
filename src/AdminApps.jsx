@@ -1,8 +1,8 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, getDocs, doc, addDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, increment, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Plus, Trash2, Edit, DollarSign, Undo, Image as ImageIcon, X, LayoutGrid, List, Users, Download, Clock, CheckCircle, CreditCard, Search } from 'lucide-react';
+import { collection, getDocs, doc, addDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, increment, serverTimestamp, setDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
+import { Plus, Trash2, Edit, DollarSign, Undo, Image as ImageIcon, X, LayoutGrid, List, Users, Download, Clock, CheckCircle, CreditCard, Search, Undo2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminApps() {
@@ -15,6 +15,13 @@ export default function AdminApps() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [missingTestersApp, setMissingTestersApp] = useState(null);
+  
+  // State for the new "Remove Testers" modal
+  const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
+  const [selectedAppForRemoval, setSelectedAppForRemoval] = useState(null);
+  const [recentlyRemoved, setRecentlyRemoved] = useState(null);
+  const [undoTimeoutId, setUndoTimeoutId] = useState(null);
+
   const [editingApp, setEditingApp] = useState(null);
 
   const [editPackageName, setEditPackageName] = useState('');
@@ -41,24 +48,62 @@ export default function AdminApps() {
   // Real-time listener for Apps
   useEffect(() => {
     setLoading(true);
-    const unsub = onSnapshot(collection(db, 'apps'), (snapshot) => {
+    const unsubApps = onSnapshot(collection(db, 'apps'), (snapshot) => {
       setApps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
     }, (error) => {
       setLoading(false); // Stop the infinite loading spinner
     });
-    return () => unsub();
-  }, []);
 
-  // Fetch Testers for cross-referencing Missing Installs
-  useEffect(() => {
     const q = query(collection(db, 'users'), where("role", "==", "tester"));
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsubTesters = onSnapshot(q, (snapshot) => {
       setTesters(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-    });
-    return () => unsub();
-  }, []);
+    }, (error) => {});
+
+    return () => {
+      unsubApps();
+      unsubTesters();
+      if (undoTimeoutId) clearTimeout(undoTimeoutId);
+    };
+  }, [undoTimeoutId]);
+
+  const openRemoveTestersModal = (app) => {
+    setSelectedAppForRemoval(app);
+    setIsRemoveModalOpen(true);
+    setRecentlyRemoved(null); // Clear any previous undo state
+  };
+
+  const closeRemoveTestersModal = () => {
+    setIsRemoveModalOpen(false);
+    setSelectedAppForRemoval(null);
+    if (undoTimeoutId) clearTimeout(undoTimeoutId);
+    setRecentlyRemoved(null);
+  };
+
+  const handleRemoveTester = async (appId, testerId) => {
+    if (window.confirm('Are you sure you want to remove this tester from the app?')) {
+      const appRef = doc(db, 'apps', appId);
+      await updateDoc(appRef, {
+        testerIds: arrayRemove(testerId)
+      });
+
+      // Set up undo state
+      if (undoTimeoutId) clearTimeout(undoTimeoutId);
+      const removedTester = testers.find(t => t.id === testerId) || { id: testerId, name: 'Unknown' };
+      setRecentlyRemoved({ appId, tester: removedTester });
+
+      const timeoutId = setTimeout(() => setRecentlyRemoved(null), 5000);
+      setUndoTimeoutId(timeoutId);
+    }
+  };
+
+  const handleUndoRemove = async () => {
+    if (!recentlyRemoved) return;
+    const { appId, tester } = recentlyRemoved;
+    await updateDoc(doc(db, 'apps', appId), { testerIds: arrayUnion(tester.id) });
+    setRecentlyRemoved(null);
+    if (undoTimeoutId) clearTimeout(undoTimeoutId);
+  };
 
   const handleAddApp = async (e) => {
     e.preventDefault();
@@ -164,8 +209,9 @@ export default function AdminApps() {
         
         const promises = testerIds.map(async (testerId) => {
           const userRef = doc(db, 'users', testerId);
+          // Instead of directly changing withdrawableBalance, we now track the number of paid apps.
           batch.update(userRef, {
-            withdrawableBalance: increment(isPaying ? 50 : -50)
+            totalAppsPaid: increment(isPaying ? 1 : -1)
           });
 
           // Group payment notifications automatically by the hour
@@ -501,6 +547,8 @@ export default function AdminApps() {
 
                   {/* Actions */}
                   <div className={`flex gap-2 sm:gap-3 ${viewMode === 'list' ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0' : 'w-full mt-auto pt-2'}`}>
+                    
+
                     <button 
                       onClick={(e) => { e.stopPropagation(); setMissingTestersApp(app); }}
                       className="flex-1 sm:flex-none border border-amber-200 text-amber-600 bg-amber-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-amber-100 flex justify-center items-center transition-colors"
@@ -508,7 +556,6 @@ export default function AdminApps() {
                     >
                       <Users className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Missing</span>
                     </button>
-
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleEditClick(app); }}
                       className="flex-1 sm:flex-none border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors"
@@ -751,16 +798,30 @@ export default function AdminApps() {
       {/* Missing Testers Modal */}
       {missingTestersApp && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
-            <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gray-50/50">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]"
+          >
+            <div className="flex justify-between items-start p-5 border-b border-gray-100 bg-gray-50/50">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 leading-tight">Missing Testers</h3>
                 <p className="text-xs text-gray-500 mt-1">{missingTestersApp.finalAppName}</p>
               </div>
-              <button onClick={() => setMissingTestersApp(null)} className="text-gray-400 hover:text-gray-600 bg-white border border-gray-200 p-1.5 rounded-lg"><X className="w-5 h-5" /></button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => { setMissingTestersApp(null); openRemoveTestersModal(missingTestersApp); }}
+                  className="text-red-600 bg-red-50 border border-red-100 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100"
+                  title="Remove existing testers from this app"
+                >
+                  Remove Testers
+                </button>
+                <button onClick={() => setMissingTestersApp(null)} className="text-gray-400 hover:text-gray-600 bg-white border border-gray-200 p-1.5 rounded-lg"><X className="w-5 h-5" /></button>
+              </div>
             </div>
             
-            <div className="overflow-y-auto p-2">
+            <div className="overflow-y-auto p-2 flex-1">
               {(() => {
                 const testedIds = missingTestersApp.testerIds || [];
                 const missing = testers.filter(t => !testedIds.includes(t.id));
@@ -776,7 +837,7 @@ export default function AdminApps() {
                   return <div className="p-8 text-center text-emerald-600 font-bold bg-emerald-50 rounded-xl m-3 border border-emerald-100">All registered testers have installed this app!</div>;
                 }
                 return finalMissingList.map((t, idx) => (
-                  <div key={t.id} className={`flex items-center justify-between p-4 ${idx !== finalMissingList.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                  <div key={t.id} className={`flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 ${idx !== finalMissingList.length - 1 ? 'border-b border-slate-100' : ''}`}>
                     <div>
                       <div className="font-bold text-sm text-gray-800">{t.name || 'Unknown Tester'}</div>
                       <div className="text-xs text-gray-500">{t.email}</div>
@@ -787,7 +848,71 @@ export default function AdminApps() {
                 ));
               })()}
             </div>
-          </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Remove Testers Modal */}
+      {isRemoveModalOpen && selectedAppForRemoval && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="flex justify-between items-start p-5 border-b border-gray-100 bg-gray-50/50">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 leading-tight">Manage Testers</h3>
+                <p className="text-xs text-gray-500 mt-1">{selectedAppForRemoval.finalAppName}</p>
+              </div>
+              <button onClick={closeRemoveTestersModal} className="text-gray-400 hover:text-gray-600 bg-white border border-gray-200 p-1.5 rounded-lg"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="overflow-y-auto p-2 flex-1">
+              {(() => {
+                const installedTesters = testers.filter(t => (selectedAppForRemoval.testerIds || []).includes(t.id));
+
+                if (installedTesters.length === 0) {
+                  return <div className="p-8 text-center text-slate-500 font-medium">No testers have installed this app.</div>;
+                }
+                return installedTesters.map((t, idx) => (
+                  <div key={t.id} className={`flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 ${idx !== installedTesters.length - 1 ? 'border-b border-slate-100' : ''}`}>
+                    <div>
+                      <div className="font-bold text-sm text-gray-800">{t.name || 'Unknown Tester'}</div>
+                      <div className="text-xs text-gray-500">{t.email}</div>
+                    </div>
+                
+                    <button 
+                      onClick={() => handleRemoveTester(selectedAppForRemoval.id, t.id)}
+                      className="p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors"
+                      title="Remove Tester"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                ));
+              })()}
+            </div>
+            <div className="p-4 bg-slate-50/70 border-t border-slate-100 h-[60px] flex items-center">
+              <AnimatePresence>
+                {recentlyRemoved && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="flex items-center gap-3"
+                  >
+                    <p className="text-sm text-slate-600">
+                      Removed <span className="font-bold">{recentlyRemoved.tester.name}</span>.
+                    </p>
+                    <button 
+                      onClick={handleUndoRemove}
+                      className="flex items-center gap-1.5 text-sm font-bold text-blue-600 hover:underline"
+                    >
+                      <Undo2 className="w-4 h-4" />
+                      Undo
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>
