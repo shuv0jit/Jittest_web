@@ -71,35 +71,29 @@ export default function TesterApps() {
         continue; // App is assigned, immediately skip the rest of the checks
       }
 
-      // STEP 2: Move unpaid apps that are 15+ days old to Production
-      if (daysActive >= 15 && !app.isPaidByAdmin) {
-        categorizedApps.production.push(appWithDays);
-        continue;
-      }
-
-      // STEP 2: Only after Step 1, evaluate 'production_access' logic
-      if (appWithDays.status === 'production_access' || appWithDays.status === 'Reviews') {
+      // STEP 2: Check status for 'production_access'
+      if (appWithDays.status === 'production_access') {
         if (hasTested) {
-          if (daysActive >= 15) {
-            categorizedApps.production.push(appWithDays);
-          } else {
-            categorizedApps.ongoing.push(appWithDays);
-          }
+          categorizedApps.production.push(appWithDays);
         } else {
           categorizedApps.install.push(appWithDays);
         }
         continue; // App is assigned, immediately skip the rest of the checks
       }
 
-      // STEP 3: Remaining apps - if no tester ID match, send to Install. Otherwise Ongoing.
+      // STEP 3: Check status for 'Ongoing'
+      if (appWithDays.status === 'Ongoing') {
+        if (hasTested) {
+        categorizedApps.ongoing.push(appWithDays);
+        } else {
+          categorizedApps.install.push(appWithDays);
+        }
+        continue; // App is assigned, skip the rest
+      }
+
+      // STEP 4: Default categorization for any other apps (e.g., status is 'waiting' or undefined)
       if (!hasTested) {
         categorizedApps.install.push(appWithDays);
-      } else {
-        if (daysActive >= 15) {
-          categorizedApps.production.push(appWithDays);
-        } else {
-          categorizedApps.ongoing.push(appWithDays);
-        }
       }
     } catch (err) {
       // Silently ignore to prevent render crashes

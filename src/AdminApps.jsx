@@ -1,8 +1,8 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
-import { db } from './firebase';
+import { db } from './firebase'; // Assuming db is your Firestore instance
 import { collection, getDocs, doc, addDoc, deleteDoc, updateDoc, writeBatch, onSnapshot, query, where, increment, serverTimestamp, setDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
-import { Plus, Trash2, Edit, DollarSign, Undo, Image as ImageIcon, X, LayoutGrid, List, Users, Download, Clock, CheckCircle, CreditCard, Search, Undo2, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit, DollarSign, Undo, Image as ImageIcon, X, LayoutGrid, List, Users, Download, Clock, CheckCircle, CreditCard, Search, Undo2, AlertTriangle, CheckSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminApps() {
@@ -322,6 +322,15 @@ export default function AdminApps() {
     }
   };
 
+  const handleStatusChange = async (appId, newStatus) => {
+    try {
+      const appRef = doc(db, 'apps', appId);
+      await updateDoc(appRef, { status: newStatus });
+    } catch (error) {
+      alert(`Failed to update app status: ${error.message}`);
+    }
+  };
+
   // Apply identical formatting & time calculation as Tester panel
   const processedApps = apps.map(app => {
     const pNameStr = typeof app.packageName === 'string' ? app.packageName.trim() : '';
@@ -356,10 +365,10 @@ export default function AdminApps() {
       const isToInstall = !app.isPaidByAdmin && app.displayTesterCount < 12;
       if (statusFilter === 'To Install') return isToInstall;
 
-      const isReviews = app.status === 'Reviews' || app.status === 'production_access' || app.daysActive >= 15;
-      if (statusFilter === 'Reviews') return !app.isPaidByAdmin && !isToInstall && isReviews;
+      const isProduction = app.status === 'production_access';
+      if (statusFilter === 'Production') return !app.isPaidByAdmin && !isToInstall && isProduction;
       
-      if (statusFilter === 'Ongoing') return !app.isPaidByAdmin && !isToInstall && !isReviews;
+      if (statusFilter === 'Ongoing') return !app.isPaidByAdmin && !isToInstall && !isProduction;
       return false;
     });
   };
@@ -377,7 +386,7 @@ export default function AdminApps() {
   currentApps.sort((a, b) => {
     if (activeTab === 'Ongoing') {
       return b.daysActive - a.daysActive;
-    } else if (activeTab === 'Reviews') {
+    } else if (activeTab === 'Production') {
       return (b.startTime?.toDate?.() || 0) - (a.startTime?.toDate?.() || 0);
     } else if (activeTab === 'Paid') {
       return (b.paidAt?.toDate?.() || 0) - (a.paidAt?.toDate?.() || 0);
@@ -432,7 +441,7 @@ export default function AdminApps() {
             {[
               { id: 'To Install', label: 'To Install', icon: Download },
               { id: 'Ongoing', label: 'Closed Testing', icon: Clock },
-              { id: 'Reviews', label: 'Reviews/Approval', icon: CheckCircle },
+              { id: 'Production', label: 'Production', icon: CheckCircle },
               { id: 'Paid', label: 'Paid', icon: CreditCard }
             ].map((tab) => {
               const isActive = activeTab === tab.id;
@@ -563,6 +572,24 @@ export default function AdminApps() {
                       <Edit className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Edit</span>
                     </button>
                     
+                    {activeTab === 'Ongoing' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleStatusChange(app.id, 'production_access'); }}
+                        className="flex-1 sm:flex-none border border-green-200 text-green-600 bg-green-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-green-100 flex justify-center items-center transition-colors"
+                        title="Move to Production"
+                      >
+                        <CheckSquare className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Production</span>
+                      </button>
+                    )}
+                    {activeTab === 'Production' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleStatusChange(app.id, 'Ongoing'); }}
+                        className="flex-1 sm:flex-none border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors"
+                        title="Move back to Ongoing"
+                      >
+                        <Undo2 className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" /> <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>Undo</span>
+                      </button>
+                    )}
                     {!app.isPaidByAdmin ? (
                       <button 
                         onClick={(e) => { e.stopPropagation(); handlePayToggle(app.id, true); }}

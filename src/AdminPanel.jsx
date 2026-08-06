@@ -99,36 +99,30 @@ export default function AdminPanel() {
       setPendingWithdrawalsCount(count);
     });
 
-    // Background Check: Generate Alerts for Apps older than 7 Days (Starting from April 26, 2026)
+    // Background Check: Generate Alerts for Apps reaching 15 days
     const checkAppsForNotifications = async () => {
       try {
-        // Cleanup old notifications to safely match the new rules
-        const notifSnap = await getDocs(collection(db, 'notifications'));
-        notifSnap.forEach(async (nDoc) => {
-          if (nDoc.data().version !== 2) {
-            await deleteDoc(doc(db, 'notifications', nDoc.id));
-          }
-        });
-
         const appsSnap = await getDocs(collection(db, 'apps'));
         const now = Date.now();
-        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-        const cutoffDate = new Date('2026-04-26T00:00:00').getTime(); // April 26th, 2026
+        const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
 
         appsSnap.forEach(async (appDoc) => {
           const app = appDoc.data();
-          if (app.createdAt && !app.advanceNotificationCreated) {
-            const createdAtMs = app.createdAt?.toDate ? app.createdAt.toDate().getTime() : new Date(app.createdAt).getTime();
-              
-            if (!isNaN(createdAtMs) && createdAtMs >= cutoffDate && (now - createdAtMs >= sevenDaysMs)) {
+          // Only check apps that are ongoing and haven't had a notification created yet
+          if (app.startTime && !app.isPaidByAdmin && !app.productionNotificationCreated && (app.status === 'Ongoing' || !app.status)) {
+            const startTimeMs = app.startTime.toDate().getTime();
+            const daysActive = Math.floor((now - startTimeMs) / (1000 * 60 * 60 * 24));
+
+            if (daysActive >= 15) {
               await addDoc(collection(db, 'notifications'), {
-                title: 'Advance Payment Required',
-                message: `You have to take advance of 7 days from this app: ${app.appName || 'Unknown App'} (${app.packageName || 'Unknown Package'})`,
+                type: 'production_reminder', // New notification type
+                title: 'Production Reminder',
+                message: `App "${app.appName || 'Unknown App'}" has been in testing for 15 days. Consider moving it to production.`,
                 createdAt: serverTimestamp(),
-                version: 2, // Version flag to prevent future deletion
-                owner: app.owner || ''
+                owner: app.owner || '',
+                appName: app.appName || 'Unknown App'
               });
-              await updateDoc(doc(db, 'apps', appDoc.id), { advanceNotificationCreated: true });
+              await updateDoc(doc(db, 'apps', appDoc.id), { productionNotificationCreated: true });
             }
           }
         });

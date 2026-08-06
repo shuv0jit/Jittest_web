@@ -1,7 +1,7 @@
 import React from 'react';
 import { db } from './firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { Bell, Check, Copy, Clock, ArrowLeft } from 'lucide-react';
+import { Bell, Check, Copy, Clock, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminNotifications({ notifications, onBack }) {
@@ -17,6 +17,23 @@ export default function AdminNotifications({ notifications, onBack }) {
     if (text) {
       navigator.clipboard.writeText(text);
       alert('Copied');
+    }
+  }
+
+  const getNotificationIcon = (type) => {
+    switch (type) {
+      case 'production_reminder':
+        return (
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100 shadow-sm">
+            <Check className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />
+          </div>
+        );
+      default:
+        return (
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0 border border-amber-100 shadow-sm">
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
+          </div>
+        );
     }
   }
 
@@ -55,10 +72,8 @@ export default function AdminNotifications({ notifications, onBack }) {
           ) : (
             notifications.map((notif) => (
               <motion.div key={notif.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-row items-center justify-between gap-2 sm:gap-4 group hover:shadow-md transition-all">
-                <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0 border border-amber-100 shadow-sm">
-                    <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
-                  </div>
+                <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">                  
+                  {getNotificationIcon(notif.type)}
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-gray-800 text-sm whitespace-normal">{notif.title || 'System Alert'}</h3>
                     <p className="text-xs text-gray-500 mt-0.5 leading-relaxed font-medium whitespace-normal">{notif.message}</p>
