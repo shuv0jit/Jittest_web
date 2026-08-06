@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Flowing gradient for the days progress bar */
+@keyframes liquid-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.liquid-progress-bar {
+  background: linear-gradient(90deg, #05aa0d, #4ade80, #16a34a, #22c55e); /* Green to Lime */
+  background-size: 200% 100%;
+  animation: liquid-flow 4s linear infinite;
+}

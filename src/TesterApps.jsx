@@ -3,6 +3,7 @@ import { db } from './firebase';
 import { collection, onSnapshot, doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { Download, Clock, CheckCircle, CreditCard, PlaySquare, CheckCircle2, LayoutGrid, List, Search } from 'lucide-react';
+import DynamicAppIcon from './DynamicAppIcon';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function TesterApps() {
@@ -262,7 +263,7 @@ export default function TesterApps() {
             <p className="text-slate-400 font-medium mt-2">You're completely caught up in this section.</p>
           </motion.div>
         ) : (
-          <motion.div key="grid-state" variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-2 gap-3 sm:gap-4" : "flex flex-col gap-3"}>
+          <motion.div key="grid-state" variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4" : "flex flex-col gap-3"}>
             {currentApps.map((app) => (
               <AppCard 
                 key={app.id} 
@@ -283,82 +284,119 @@ export default function TesterApps() {
 const AppCard = ({ app, section, onInstallClick, viewMode }) => {
   const pNameStr = typeof app.packageName === 'string' ? app.packageName : '';
   const finalAppName = app.appName || (pNameStr ? pNameStr.split('.').pop() : 'Unknown Application');
-  
+  const daysProgress = Math.min(1, (section === 'install' ? 0 : app.daysActive) / 14);
+
+  // --- DYNAMIC CHART GENERATION ---
+  // This function creates a pseudo-random, but consistent, path for the graph based on app data.
+  const generateChartPath = (testerCount, maxTesters = 14) => {
+    const points = [
+      { x: 0, y: 68 } // Start point
+    ];
+    // Create a few data points for a more realistic curve
+    for (let i = 1; i < 4; i++) {
+      // Use app ID to create a consistent but varied shape
+      const yVariance = (app.id.charCodeAt(i % app.id.length) % 20) - 10;
+      points.push({ x: i * 25, y: 60 - (i * (testerCount / maxTesters) * 2) + yVariance });
+    }
+    // End point is the actual tester count
+    points.push({ x: 100, y: 68 - (testerCount / maxTesters) * 60 });
+    
+    // Create a smooth SVG curve from the points
+    let path = `M ${points[0].x},${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const x_mid = (points[i].x + points[i+1].x) / 2;
+      const y_mid = (points[i].y + points[i+1].y) / 2;
+      const cp_x1 = (x_mid + points[i].x) / 2;
+      const cp_x2 = (x_mid + points[i+1].x) / 2;
+      path += ` Q ${cp_x1},${points[i].y} ${x_mid},${y_mid}`;
+      path += ` Q ${cp_x2},${points[i+1].y} ${points[i+1].x},${points[i+1].y}`;
+    }
+    return path;
+  };
+
+  const chartPath = generateChartPath(app.displayTesterCount);
+  const areaPath = `${chartPath} L 100,70 L 0,70 Z`;
+  // --- END DYNAMIC CHART GENERATION ---
+
   const itemVariants = {
     hidden: { opacity: 0, y: 15 },
     show: { opacity: 1, y: 0 }
   };
 
   const handleCardClick = () => {
-    // Only trigger the install action if the app is in the "install" or "ongoing" sections.
-    if (section === 'install' || section === 'ongoing') {
+    if (section === 'install') {
       onInstallClick();
-    } else if (pNameStr) { // For "production" and "paid", just open the link.
+    } else if (pNameStr) {
       window.open(`https://play.google.com/store/apps/details?id=${pNameStr}`, '_blank', 'noopener,noreferrer');
     }
   };
 
   return (
-    <motion.div 
+    <motion.div
       variants={itemVariants}
-      whileHover={{ scale: 1.02 }}
       onClick={handleCardClick}
-      className={`cursor-pointer bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all p-3 sm:p-4 relative group flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center gap-3 sm:gap-4' : 'flex-col text-center'}`}
+      className="relative w-full rounded-2xl bg-gradient-to-br from-green-200 via-green-100 to-green-200 p-0.5 shadow-xl shadow-green-900/10 cursor-pointer group"
     >
-      {/* App Info */}
-      <div className={`flex flex-1 min-w-0 w-full ${viewMode === 'list' ? 'items-center text-left' : 'flex-col items-center'}`}>
-        {app.imageUrl ? (
-          <img src={app.imageUrl} alt={finalAppName} className={`rounded-xl object-cover shadow-sm border border-gray-100 shrink-0 ${viewMode === 'list' ? 'w-12 h-12 mr-4' : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'}`} />
-        ) : (
-          <div className={`rounded-xl bg-blue-50 flex items-center justify-center text-blue-300 border border-blue-100 shrink-0 ${viewMode === 'list' ? 'w-12 h-12 mr-4' : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'}`}>
-            <PlaySquare className="w-6 h-6" />
-          </div>
-        )}
-        <div className="flex-1 overflow-hidden w-full">
-          <h3 className="font-bold text-slate-800 truncate group-hover:text-blue-600 transition-colors text-sm sm:text-base">{finalAppName}</h3>
-          <p className="text-[9px] sm:text-[11px] text-slate-400 truncate mt-0.5 font-medium">{app.packageName}</p>
+      <div className="relative h-full w-full rounded-[0.9rem] bg-white p-4 flex flex-col overflow-hidden transition-all group-hover:shadow-inner">
+        <div className="absolute inset-0 bg-[url('/subtle-pattern.svg')] opacity-[0.03] pointer-events-none"></div>
+
+        {/* Top Section: App Info */}
+        <div className="flex flex-col items-center text-center mb-4">
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+            className="w-14 h-14 mb-3 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-green-500/20 overflow-hidden"
+          >
+            {app.imageUrl ? (
+              <img src={app.imageUrl} alt={finalAppName} className="w-full h-full object-cover rounded-3xl" />
+            ) : (
+              <img 
+                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(finalAppName)}&background=random&color=fff&size=128&font-size=0.3&bold=true`} 
+                alt={finalAppName} 
+                className="w-full h-full object-cover" 
+              />
+            )}
+          </motion.div>
+          <h2 className="text-sm font-black text-blue-700 tracking-tight">{finalAppName}</h2>
+          <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">{app.packageName}</p>
         </div>
-      </div>
 
-      {/* Stats */}
-      <div className={`grid grid-cols-2 gap-2 w-full ${viewMode === 'grid' ? 'my-3' : 'mt-3 sm:mt-0 sm:w-40 shrink-0'}`}>
-        <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 text-center">
-          <div className="text-[9px] sm:text-[10px] text-slate-500 mb-0.5 uppercase font-bold">Installs</div>
-          <div className="font-bold text-slate-800 text-xs sm:text-sm">{app.displayTesterCount}/12</div>
+        {/* Metrics & Install Graph */}
+        <div className="grid grid-cols-2 gap-4 my-auto text-center">
+          <div className="flex flex-col">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">INSTALLS</p>
+            <p className="text-lg font-black text-slate-900 mt-1">
+              {app.displayTesterCount}<span className="text-slate-900">/12</span>
+            </p>
+            <div className="w-full h-1 bg-slate-100 rounded-full mt-2 overflow-hidden"><div className="h-full bg-black" style={{width: `${Math.min(100, (app.displayTesterCount / 12) * 100)}%`}}></div></div>
+          </div>
+          <div className="flex flex-col">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">DAYS</p>
+            <p className="text-lg font-black text-slate-900 mt-1">
+              {section === 'install' ? 0 : app.daysActive}<span className="text-slate-900">/14</span>
+            </p>
+            <div className="w-full h-1 bg-slate-100 rounded-full mt-2 overflow-hidden"><div className="h-full bg-black" style={{width: `${daysProgress * 100}%`}}></div></div>
+          </div>
         </div>
-        <div className={`bg-slate-50 p-2 rounded-lg border border-slate-100 text-center transition-opacity ${section === 'install' ? 'opacity-40' : ''}`}>
-          <div className="text-[9px] sm:text-[10px] text-slate-500 mb-0.5 uppercase font-bold">Days</div>
-          <div className="font-bold text-slate-800 text-xs sm:text-sm">{section === 'install' ? '0' : app.daysActive}/14</div>
+
+        {/* Days Progress Bar at the bottom */}
+        <div className="mt-auto pt-4">
+          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden relative border-2 border-slate-200">
+            <motion.div
+              className="absolute inset-0 rounded-full liquid-progress-bar"
+              initial={{ width: 0 }}
+              animate={{ width: `${daysProgress * 100}%` }}
+              transition={{ duration: 2, ease: [0.22, 1, 0.36, 1] }}
+            />
+            {/* White head at the END of the bar */}
+            <motion.div
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-gradient-to-br from-stone-200 to-neutral-900 rounded-none z-20 border-2 border-white shadow-md outline outline-1 outline-blue-500/50"  initial={{ left: '0%' }}
+              animate={{ left: `${daysProgress * 100}%` }}
+              transition={{ duration: 2, ease: [0.22, 1, 0.36, 1] }}
+            />
+          </div>
         </div>
-      </div>
-
-      {/* Actions */}
-      <div className={`flex gap-2 sm:gap-3 ${viewMode === 'list' ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0' : 'w-full mt-auto'}`}>
-        {section === 'install' && (
-          <button onClick={(e) => { e.stopPropagation(); onInstallClick(); }} className="w-full bg-blue-600 text-white py-2 sm:py-3 rounded-xl text-[11px] sm:text-sm font-bold hover:bg-blue-700 transition-colors shadow-md shadow-blue-600/20 flex justify-center items-center">
-            <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2"/> Install
-          </button>
-        )}
-
-        {section === 'ongoing' && (
-          <div className="w-full bg-slate-50 p-2 sm:p-3 rounded-xl border border-slate-100">
-             <div className="w-full bg-slate-200/80 rounded-full h-1.5 sm:h-2 overflow-hidden" title={`Day ${app.daysActive} of 14`}>
-                <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (app.daysActive / 14) * 100)}%` }} transition={{ duration: 1, ease: "easeOut" }} className="bg-blue-500 h-full rounded-full" />
-             </div>
-          </div>
-        )}
-
-        {section === 'production' && (
-          <div className="w-full bg-blue-50 text-blue-600 py-2 sm:py-3 rounded-xl text-[10px] sm:text-sm font-bold flex justify-center items-center border border-blue-100">
-             <CheckCircle2 className="w-3 h-3 mr-1"/> Complete
-          </div>
-        )}
-
-        {section === 'paid' && (
-          <div className="w-full bg-emerald-50 text-emerald-600 py-2 sm:py-3 rounded-xl text-[10px] sm:text-sm font-bold flex justify-center items-center border border-emerald-100">
-             <CheckCircle2 className="w-3 h-3 mr-1"/> Paid
-          </div>
-        )}
       </div>
     </motion.div>
   );
