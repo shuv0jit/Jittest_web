@@ -21,6 +21,7 @@ export function useAuth() {
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [role, setRole] = useState(null);
+  const [testerData, setTesterData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,12 +31,15 @@ export const AuthProvider = ({ children }) => {
         
         try {
           // 1. Check if user has role='admin' in the database
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists() && userDoc.data().role === 'admin') {
-            setRole('admin');
-          } 
-          // 2. Fallback to hardcoded email check
-          else if (user.email === ADMIN_EMAIL) {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const data = userDocSnap.data();
+            setTesterData(data); // Store full tester data
+            setRole(data.role === 'admin' ? 'admin' : 'tester');
+          } else if (user.email === ADMIN_EMAIL) {
+            // Fallback for admin if not in DB
             setRole('admin');
           } else {
             setRole('tester');
@@ -57,7 +61,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => signOut(auth);
 
   return (
-    <AuthContext.Provider value={{ currentUser, role, loading, loginEmail, loginGoogle, logout }}>
+    <AuthContext.Provider value={{ currentUser, role, loading, testerData, loginEmail, loginGoogle, logout }}>
       {!loading && children}
     </AuthContext.Provider>
   );

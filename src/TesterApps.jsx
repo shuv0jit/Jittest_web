@@ -7,7 +7,7 @@ import DynamicAppIcon from './DynamicAppIcon';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function TesterApps() {
-  const { currentUser } = useAuth();
+  const { currentUser, testerData } = useAuth(); // Get testerData from AuthContext
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState('install');
@@ -36,6 +36,8 @@ export default function TesterApps() {
     production: [],
     paid: []
   };
+
+  const NEW_LOGIC_CUTOFF_DATE = new Date('2026-07-14T00:00:00Z');
 
   for (const app of apps) {
     try {
@@ -66,18 +68,45 @@ export default function TesterApps() {
       // Strict Array check to prevent .includes() crashes
       const hasTested = Array.isArray(appWithDays.testerIds) ? appWithDays.testerIds.includes(currentUser.uid) : false;
 
+      // Determine if the current user is a "new" tester based on the cutoff date
+      const isNewTester = testerData?.createdAt?.toDate() >= NEW_LOGIC_CUTOFF_DATE;
+
+      // --- New Tester Specific Filtering (applies to all categories for new testers) ---
+      // This filter applies to ALL apps for new testers, regardless of tab.
+      if (isNewTester) {
+        const testerJoinDate = testerData.createdAt.toDate();
+        const appCreationDate = app.createdAt?.toDate();
+
+        if (appCreationDate) {
+          // Change 14-day window to 8 days
+          const eightDaysBeforeJoin = new Date(testerJoinDate.getTime() - 8 * 24 * 60 * 60 * 1000);
+          if (appCreationDate < eightDaysBeforeJoin) {
+            // Skip this app entirely for new testers if it's too old based on the 8-day window
+            continue; 
+          }
+        }
+      }
+
       // STEP 1: Logic Change - Direct send isPaidByAdmin apps to Paid zone
       if (appWithDays.isPaidByAdmin) {
         categorizedApps.paid.push(appWithDays);
+        // For new testers, only show paid apps they actually tested
+        if (isNewTester && !hasTested) {
+          continue; // Skip if new tester and didn't test this paid app
+        }
         continue; // App is assigned, immediately skip the rest of the checks
       }
+
+      // Universal Rule: Apps with 'production_access' or 'completed' status should NEVER appear in 'To Install'
+      const isProductionOrCompletedStatus = appWithDays.status === 'production_access' || appWithDays.status === 'completed';
 
       // STEP 2: Check status for 'production_access'
       if (appWithDays.status === 'production_access') {
         if (hasTested) {
           categorizedApps.production.push(appWithDays);
         } else {
-          categorizedApps.install.push(appWithDays);
+          // If not tested, and it's production_access, it should NOT go to install.
+          // It's implicitly skipped from 'install' by not being added here.
         }
         continue; // App is assigned, immediately skip the rest of the checks
       }
@@ -87,14 +116,21 @@ export default function TesterApps() {
         if (hasTested) {
         categorizedApps.ongoing.push(appWithDays);
         } else {
-          categorizedApps.install.push(appWithDays);
+          // If not tested, and it's Ongoing, it goes to install.
+          // Ensure it's not production_access or completed (though previous checks should handle this)
+          if (!isProductionOrCompletedStatus) {
+            categorizedApps.install.push(appWithDays);
+          }
         }
         continue; // App is assigned, skip the rest
       }
 
       // STEP 4: Default categorization for any other apps (e.g., status is 'waiting' or undefined)
       if (!hasTested) {
-        categorizedApps.install.push(appWithDays);
+        // Ensure it's not production_access or completed
+        if (!isProductionOrCompletedStatus) {
+          categorizedApps.install.push(appWithDays);
+        }
       }
     } catch (err) {
       // Silently ignore to prevent render crashes
