@@ -172,19 +172,10 @@ export default function TesterPanel() {
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
-          const isNewTester = userData.createdAt?.toDate() >= NEW_LOGIC_CUTOFF_DATE;
           const totalAlreadyPaid = userData.totalPaidAmount || 0;
-          let newWithdrawable;
-
-          if (isNewTester) {
-            // New Logic: Per-tester calculation
-            const xAmountForTester = personalPaidAppsCount * 50;
-            newWithdrawable = Math.max(0, xAmountForTester - totalAlreadyPaid);
-          } else {
-            // Old Logic: Global calculation
-            const xAmountGlobal = globalPaidAppsCount * 50;
-            newWithdrawable = Math.max(0, xAmountGlobal - totalAlreadyPaid);
-          }
+          // Restore the original global calculation for all testers
+          const xAmountGlobal = globalPaidAppsCount * 50;
+          const newWithdrawable = Math.max(0, xAmountGlobal - totalAlreadyPaid);
           await updateDoc(userDocRef, { withdrawableBalance: newWithdrawable });
         }
       } catch (error) {}

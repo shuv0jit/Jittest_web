@@ -87,10 +87,19 @@ export default function TesterApps() {
         }
       }
 
+      // --- Old Tester Rule: Show all paid/completed apps ---
+      // If the tester is an "old" tester, they should see all paid/completed apps, even if they didn't install them.
+      if (!isNewTester) {
+        if (appWithDays.isPaidByAdmin || appWithDays.status === 'completed') {
+          categorizedApps.paid.push(appWithDays);
+          continue; // App is categorized, move to the next one.
+        }
+      }
+
       // --- Simplified Core Logic ---
       // If the tester has installed the app, categorize it into Ongoing, Production, or Paid.
       if (hasTested) {
-        if (appWithDays.isPaidByAdmin) {
+        if (appWithDays.isPaidByAdmin || appWithDays.status === 'completed') {
           categorizedApps.paid.push(appWithDays);
         } else if (appWithDays.status === 'production_access') {
           categorizedApps.production.push(appWithDays);
@@ -100,8 +109,8 @@ export default function TesterApps() {
         }
       } else {
         // If the tester has NOT installed the app, it belongs in the 'To Install' list,
-        // as long as it hasn't been moved to production or paid by the admin.
-        const isProductionOrPaid = appWithDays.status === 'production_access' || appWithDays.isPaidByAdmin;
+        // as long as it hasn't been moved to production, completed, or paid by the admin.
+        const isProductionOrPaid = appWithDays.status === 'production_access' || appWithDays.isPaidByAdmin || appWithDays.status === 'completed';
         if (!isProductionOrPaid) {
           categorizedApps.install.push(appWithDays);
         }
@@ -341,7 +350,7 @@ const AppCard = ({ app, section, onInstallClick, viewMode }) => {
     install: { label: 'To Install', actionText: 'Tap to install', icon: AlertTriangle },
     ongoing: { label: 'Ongoing', actionText: 'Keep testing', icon: AlertTriangle },
     production: { label: 'Production', actionText: 'Testing complete', icon: CheckCircle },
-    paid: { label: 'Paid', actionText: 'Payment processed', icon: CheckCircle, color: 'text-green-500' },
+    paid: { label: 'Paid', actionText: 'Payment processed', icon: CheckCircle, color: 'text-black-500' },
   };
 
   const currentStatus = statusConfig[derivedStatus] || statusConfig.install;
@@ -382,11 +391,19 @@ const AppCard = ({ app, section, onInstallClick, viewMode }) => {
             <div className="flex justify-between items-center">
               <div>
               <p className="text-[12px] text-slate-500">Days</p>
-                <p className="text-base font-bold text-slate-900">{daysCount}<span className="font-medium text-slate-400">/{daysTarget}</span></p>
+                <p className="text-base font-bold">
+                  <span className={daysCount > 0 ? 'text-black-600' : 'text-slate-900'}>{daysCount}</span>
+                  <span className="font-medium text-slate-900">/{daysTarget}</span>
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-[12px] text-slate-500">Testers</p>
-                <p className="text-base font-bold text-slate-900">{testersCount}<span className="font-medium text-slate-400">/{testersTarget}</span></p>
+                <p className="text-base font-bold">
+                  <span className={testersCount < 12 ? 'text-red-600' : 'text-black-600'}>
+                    {testersCount}
+                  </span>
+                  <span className="font-medium text-slate-900">/{testersTarget}</span>
+                </p>
               </div>
             </div>
             {/* Row 3: Status */}
