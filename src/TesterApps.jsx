@@ -87,32 +87,22 @@ export default function TesterApps() {
         }
       }
 
-      // STEP 1: Logic Change - Direct send isPaidByAdmin apps to Paid zone
-      if (appWithDays.isPaidByAdmin) {
-        categorizedApps.paid.push(appWithDays);
-        continue; // App is assigned, immediately skip the rest of the checks
-      }
-
-      // Universal Rule: Apps with 'production_access' or 'completed' status should NEVER appear in 'To Install'
-      const isProductionOrCompletedStatus = appWithDays.status === 'production_access' || appWithDays.status === 'completed';
-
-      // STEP 2: Check for apps the user has already installed
+      // --- Simplified Core Logic ---
+      // If the tester has installed the app, categorize it into Ongoing, Production, or Paid.
       if (hasTested) {
-        if (appWithDays.status === 'production_access') {
+        if (appWithDays.isPaidByAdmin) {
+          categorizedApps.paid.push(appWithDays);
+        } else if (appWithDays.status === 'production_access') {
           categorizedApps.production.push(appWithDays);
         } else {
-          // If they have tested it, and it's not production or paid, it's ongoing.
+          // Default for a tested app is 'Ongoing'
           categorizedApps.ongoing.push(appWithDays);
         }
-        continue; // App is assigned, immediately skip the rest of the checks
-      }
-
-      // STEP 3: Check status for 'Ongoing'
-      if (appWithDays.status === 'Ongoing') {
-        if (hasTested) {
-          categorizedApps.ongoing.push(appWithDays);
-        } else {
-          // If not tested, and it's Ongoing, it goes to install.
+      } else {
+        // If the tester has NOT installed the app, it belongs in the 'To Install' list,
+        // as long as it hasn't been moved to production or paid by the admin.
+        const isProductionOrPaid = appWithDays.status === 'production_access' || appWithDays.isPaidByAdmin;
+        if (!isProductionOrPaid) {
           categorizedApps.install.push(appWithDays);
         }
       }
@@ -392,11 +382,11 @@ const AppCard = ({ app, section, onInstallClick, viewMode }) => {
             <div className="flex justify-between items-center">
               <div>
               <p className="text-[12px] text-slate-500">Days</p>
-                <p className="text-base font-bold text-slate-900">{daysCount}<span className="font-medium text-slate-800">/{daysTarget}</span></p>
+                <p className="text-base font-bold text-slate-900">{daysCount}<span className="font-medium text-slate-400">/{daysTarget}</span></p>
               </div>
               <div className="text-right">
                 <p className="text-[12px] text-slate-500">Testers</p>
-                <p className="text-base font-bold text-slate-900">{testersCount}<span className="font-medium text-slate-800">/{testersTarget}</span></p>
+                <p className="text-base font-bold text-slate-900">{testersCount}<span className="font-medium text-slate-400">/{testersTarget}</span></p>
               </div>
             </div>
             {/* Row 3: Status */}
