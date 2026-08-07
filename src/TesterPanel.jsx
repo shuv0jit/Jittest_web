@@ -301,7 +301,7 @@ export default function TesterPanel() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50/80 font-sans overflow-hidden" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+    <div className="flex h-screen bg-slate-100 font-sans overflow-hidden" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       
       <TesterSidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 

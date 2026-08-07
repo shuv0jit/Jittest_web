@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
-import { Download, Clock, CheckCircle, CreditCard, PlaySquare, CheckCircle2, LayoutGrid, List, Search } from 'lucide-react';
+import { Download, Clock, CheckCircle, CreditCard, PlaySquare, CheckCircle2, LayoutGrid, List, Search, AlertTriangle, SlidersHorizontal, Users } from 'lucide-react';
 import DynamicAppIcon from './DynamicAppIcon';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -316,43 +316,64 @@ export default function TesterApps() {
   );
 }
 
-// Responsive & Animated App Card Component
+const ProgressBar = ({ progress, color, thumbColor }) => {
+  return (
+    <div className="relative w-full h-2 rounded-lg bg-slate-200 overflow-hidden">
+      {/* Fill */}
+      <motion.div
+        className="h-full rounded-lg"
+        style={{ backgroundColor: color }}
+        initial={{ width: 0 }}
+        animate={{ width: `${progress}%` }}
+        transition={{ duration: 1.5, ease: "easeInOut" }}
+      />
+      {/* Thumb/Knob Indicator */}
+      <motion.div
+        className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-lg bg-white shadow-[0_2px_4px_rgba(0,0,0,0.15)]"
+        style={{
+          border: `3px solid ${thumbColor}`,
+          left: `${progress}%`,
+          transform: 'translate(-50%, -50%)',
+        }}
+        initial={{ left: '0%' }}
+        animate={{ left: `${progress}%` }}
+        transition={{ duration: 1.5, ease: "easeInOut" }}
+      />
+    </div>
+  );
+};
+
 const AppCard = ({ app, section, onInstallClick, viewMode }) => {
   const pNameStr = typeof app.packageName === 'string' ? app.packageName : '';
   const finalAppName = app.appName || (pNameStr ? pNameStr.split('.').pop() : 'Unknown Application');
-  const daysProgress = Math.min(1, (section === 'install' ? 0 : app.daysActive) / 14);
 
-  // --- DYNAMIC CHART GENERATION ---
-  // This function creates a pseudo-random, but consistent, path for the graph based on app data.
-  const generateChartPath = (testerCount, maxTesters = 14) => {
-    const points = [
-      { x: 0, y: 68 } // Start point
-    ];
-    // Create a few data points for a more realistic curve
-    for (let i = 1; i < 4; i++) {
-      // Use app ID to create a consistent but varied shape
-      const yVariance = (app.id.charCodeAt(i % app.id.length) % 20) - 10;
-      points.push({ x: i * 25, y: 60 - (i * (testerCount / maxTesters) * 2) + yVariance });
-    }
-    // End point is the actual tester count
-    points.push({ x: 100, y: 68 - (testerCount / maxTesters) * 60 });
-    
-    // Create a smooth SVG curve from the points
-    let path = `M ${points[0].x},${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const x_mid = (points[i].x + points[i+1].x) / 2;
-      const y_mid = (points[i].y + points[i+1].y) / 2;
-      const cp_x1 = (x_mid + points[i].x) / 2;
-      const cp_x2 = (x_mid + points[i+1].x) / 2;
-      path += ` Q ${cp_x1},${points[i].y} ${x_mid},${y_mid}`;
-      path += ` Q ${cp_x2},${points[i+1].y} ${points[i+1].x},${points[i+1].y}`;
-    }
-    return path;
+  // 1. Derive data from props to match the requested structure
+  const daysCount = section === 'install' ? 0 : app.daysActive;
+  const daysTarget = 14;
+  const testersCount = app.displayTesterCount;
+  const testersTarget = 12;
+  
+  // New status logic based on database field
+  let derivedStatus = section; // Start with the section name
+  if (app.isPaidByAdmin || app.status === 'completed') {
+    derivedStatus = 'paid';
+  } else if (app.status === 'production_access') {
+    derivedStatus = 'production';
+  } else if (section === 'ongoing') {
+    derivedStatus = 'ongoing';
+  }
+
+  const statusConfig = {
+    install: { label: 'To Install', actionText: 'Tap to install', icon: AlertTriangle },
+    ongoing: { label: 'Ongoing', actionText: 'Keep testing', icon: AlertTriangle },
+    production: { label: 'Production', actionText: 'Testing complete', icon: CheckCircle },
+    paid: { label: 'Paid', actionText: 'Payment processed', icon: CheckCircle, color: 'text-green-500' },
   };
 
-  const chartPath = generateChartPath(app.displayTesterCount);
-  const areaPath = `${chartPath} L 100,70 L 0,70 Z`;
-  // --- END DYNAMIC CHART GENERATION ---
+  const currentStatus = statusConfig[derivedStatus] || statusConfig.install;
+
+  const daysProgress = Math.min(100, (daysCount / daysTarget) * 100);
+  const testersProgress = Math.min(100, (testersCount / testersTarget) * 100);
 
   const itemVariants = {
     hidden: { opacity: 0, y: 15 },
@@ -371,67 +392,66 @@ const AppCard = ({ app, section, onInstallClick, viewMode }) => {
     <motion.div
       variants={itemVariants}
       onClick={handleCardClick}
-      className="relative w-full rounded-2xl bg-gradient-to-br from-green-200 via-green-100 to-green-200 p-0.5 shadow-xl shadow-green-900/10 cursor-pointer group"
+      className="w-full bg-gradient-to-br from-teal-100 via-white to-orange-100 rounded-[2rem] cursor-pointer p-0.5 flex flex-col"
+      style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 15px 30px -15px rgba(0, 0, 0, 0.15)' }}
     >
-      <div className="relative h-full w-full rounded-[0.9rem] bg-white p-4 flex flex-col overflow-hidden transition-all group-hover:shadow-inner">
-        <div className="absolute inset-0 bg-[url('/subtle-pattern.svg')] opacity-[0.03] pointer-events-none"></div>
-
-        {/* Top Section: App Info */}
-        <div className="flex flex-col items-center text-center mb-4">
-          <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-            className="w-14 h-14 mb-3 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-green-500/20 overflow-hidden"
-          >
-            {app.imageUrl ? (
-              <img src={app.imageUrl} alt={finalAppName} className="w-full h-full object-cover rounded-3xl" />
-            ) : (
-              <img 
-                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(finalAppName)}&background=random&color=fff&size=128&font-size=0.3&bold=true`} 
-                alt={finalAppName} 
-                className="w-full h-full object-cover" 
-              />
-            )}
-          </motion.div>
-          <h2 className="text-sm font-black text-blue-700 tracking-tight">{finalAppName}</h2>
-          <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">{app.packageName}</p>
-        </div>
-
-        {/* Metrics & Install Graph */}
-        <div className="grid grid-cols-2 gap-4 my-auto text-center">
-          <div className="flex flex-col">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">INSTALLS</p>
-            <p className="text-lg font-black text-slate-900 mt-1">
-              {app.displayTesterCount}<span className="text-slate-900">/12</span>
-            </p>
-            <div className="w-full h-1 bg-slate-100 rounded-full mt-2 overflow-hidden"><div className="h-full bg-black" style={{width: `${Math.min(100, (app.displayTesterCount / 12) * 100)}%`}}></div></div>
-          </div>
-          <div className="flex flex-col">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">DAYS</p>
-            <p className="text-lg font-black text-slate-900 mt-1">
-              {section === 'install' ? 0 : app.daysActive}<span className="text-slate-900">/14</span>
-            </p>
-            <div className="w-full h-1 bg-slate-100 rounded-full mt-2 overflow-hidden"><div className="h-full bg-black" style={{width: `${daysProgress * 100}%`}}></div></div>
+      <div className="bg-gradient-to-br from-white/90 to-white/70 rounded-t-[1.9rem] sm:rounded-[1.9rem] h-full w-full backdrop-blur-md flex-1">
+        <div className="p-5 sm:pb-4">
+        {/* --- SHARED HEADER --- */}
+        <div className="flex items-start">
+          <div className="min-w-0">
+            <p className="text-[12px] text-slate-500">App Name</p>
+            <p className="text-base font-bold text-slate-900 mb-1 truncate">{finalAppName}</p>
+            <p className="text-[12px] text-slate-500">Status</p>
+            <p className="text-sm font-semibold text-slate-900">{currentStatus.label}</p>
           </div>
         </div>
 
-        {/* Days Progress Bar at the bottom */}
-        <div className="mt-auto pt-4">
-          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden relative border-2 border-slate-200">
-            <motion.div
-              className="absolute inset-0 rounded-full liquid-progress-bar"
-              initial={{ width: 0 }}
-              animate={{ width: `${daysProgress * 100}%` }}
-              transition={{ duration: 2, ease: [0.22, 1, 0.36, 1] }}
-            />
-            {/* White head at the END of the bar */}
-            <motion.div
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-gradient-to-br from-stone-200 to-neutral-900 rounded-none z-20 border-2 border-white shadow-md outline outline-1 outline-blue-500/50"  initial={{ left: '0%' }}
-              animate={{ left: `${daysProgress * 100}%` }}
-              transition={{ duration: 2, ease: [0.22, 1, 0.36, 1] }}
-            />
+        {/* --- MOBILE LAYOUT (Default, hidden on sm+) --- */}
+        <div className="sm:hidden mt-4 space-y-4">
+          <div>
+            <p className="text-[13px] text-slate-500">Days Count</p>
+            <p className="text-base font-bold text-slate-900 mb-1.5">{daysCount} / {daysTarget} Days</p>
+            <ProgressBar progress={daysProgress} color="#0D9488" thumbColor="#0D9488" />
           </div>
+          <div className="flex items-center text-[13px] font-medium text-slate-900">
+            <SlidersHorizontal className="w-4 h-4 mr-2 text-slate-500" />
+            {currentStatus.actionText}
+          </div>
+          <div>
+            <p className="text-[13px] text-slate-500">Testers Count</p>
+            <p className="text-base font-bold text-slate-900 mb-1.5">{testersCount} / {testersTarget} Testers</p>
+            <ProgressBar progress={testersProgress} color="#EA580C" thumbColor="#EA580C" />
+          </div>
+          <p className="text-[13px] text-slate-900">Active testers: {testersCount}</p>
+        </div>
+
+        {/* --- TABLET/PC LAYOUT (Hidden by default, visible on sm+) --- */}
+        <div className="hidden sm:block mt-4">
+          <div className="grid grid-cols-2 gap-5">
+            <div className="space-y-1.5">
+              <p className="text-base font-bold text-slate-900">{daysCount} / {daysTarget} Days</p>
+              <ProgressBar progress={daysProgress} color="#0D9488" thumbColor="#0D9488" />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-base font-bold text-slate-900">{testersCount} / {testersTarget} Testers</p>
+              <ProgressBar progress={testersProgress} color="#EA580C" thumbColor="#EA580C" />
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      {/* --- TABLET/PC FOOTER (Hidden by default, visible on sm+) --- */}
+      {/* This is now a sibling to the main card body, not a child, to prevent overlap */}
+      <div className="hidden sm:flex items-center justify-between gap-6 bg-[#F8FAFC] border-t border-slate-200 px-5 py-3 rounded-b-[1.9rem]">
+        <div className="flex items-center gap-2 text-[13px] font-medium text-slate-900">
+          <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+          {currentStatus.actionText}
+        </div>
+        <div className="flex items-center gap-2 text-[13px] font-medium text-slate-900">
+          <Users className="w-4 h-4 text-slate-500" />
+          Active testers: {testersCount}
         </div>
       </div>
     </motion.div>
