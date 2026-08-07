@@ -379,25 +379,30 @@ const AppCard = ({ app, section, onInstallClick, viewMode }) => {
       className="w-full bg-gradient-to-br from-teal-100 via-white to-orange-100 rounded-[2rem] cursor-pointer p-0.5 flex flex-col"
       style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 15px 30px -15px rgba(0, 0, 0, 0.15)' }}
     >
-      <div className="bg-gradient-to-br from-white/90 to-white/70 rounded-[1.9rem] h-full w-full backdrop-blur-md flex flex-col flex-1">
+      <div className="bg-gradient-to-br from-white/90 to-white/70 rounded-[1.9rem] h-full w-full backdrop-blur-md flex flex-col flex-1 p-5">
         <div className="p-5 sm:pb-4">
           {/* --- SHARED HEADER --- */}
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 pr-4">
-              <p className="text-[12px] text-slate-500">App Name</p>
-              <p className="text-base font-bold text-slate-900 mb-1 truncate" title={finalAppName}>{finalAppName}</p>
-              <p className="text-[12px] text-slate-500 mt-2">Status</p>
-              <p className="text-sm font-semibold text-slate-900">{currentStatus.label}</p>
+          <div className="flex flex-col gap-3">
+            {/* Row 1: App Name */}
+            <div>
+              <p className="text-xs text-slate-500">App Name</p>
+              <p className="text-base font-bold text-slate-900 truncate" title={finalAppName}>{finalAppName}</p>
             </div>
-            <div className="text-right shrink-0">
+            {/* Row 2: Counts */}
+            <div className="flex justify-between items-center">
+              <div>
               <p className="text-[12px] text-slate-500">Days</p>
-              <p className="text-base font-bold text-slate-900 mb-1">
-                {daysCount}<span className="font-medium text-slate-400">/{daysTarget}</span>
-              </p>
-              <p className="text-[12px] text-slate-500 mt-2">Testers</p>
-              <p className="text-base font-bold text-slate-900">
-                {testersCount}<span className="font-medium text-slate-400">/{testersTarget}</span>
-              </p>
+                <p className="text-base font-bold text-slate-900">{daysCount}<span className="font-medium text-slate-800">/{daysTarget}</span></p>
+              </div>
+              <div className="text-right">
+                <p className="text-[12px] text-slate-500">Testers</p>
+                <p className="text-base font-bold text-slate-900">{testersCount}<span className="font-medium text-slate-800">/{testersTarget}</span></p>
+              </div>
+            </div>
+            {/* Row 3: Status */}
+            <div>
+              <p className="text-xs text-slate-500">Status</p>
+              <p className="text-sm font-semibold text-slate-900">{currentStatus.label}</p>
             </div>
           </div>
         </div>
