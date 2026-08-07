@@ -90,23 +90,19 @@ export default function TesterApps() {
       // STEP 1: Logic Change - Direct send isPaidByAdmin apps to Paid zone
       if (appWithDays.isPaidByAdmin) {
         categorizedApps.paid.push(appWithDays);
-        // For new testers, only show paid apps they actually tested
-        if (isNewTester && !hasTested) {
-          continue; // Skip if new tester and didn't test this paid app
-        }
         continue; // App is assigned, immediately skip the rest of the checks
       }
 
       // Universal Rule: Apps with 'production_access' or 'completed' status should NEVER appear in 'To Install'
       const isProductionOrCompletedStatus = appWithDays.status === 'production_access' || appWithDays.status === 'completed';
 
-      // STEP 2: Check status for 'production_access'
-      if (appWithDays.status === 'production_access') {
-        if (hasTested) {
+      // STEP 2: Check for apps the user has already installed
+      if (hasTested) {
+        if (appWithDays.status === 'production_access') {
           categorizedApps.production.push(appWithDays);
         } else {
-          // If not tested, and it's production_access, it should NOT go to install.
-          // It's implicitly skipped from 'install' by not being added here.
+          // If they have tested it, and it's not production or paid, it's ongoing.
+          categorizedApps.ongoing.push(appWithDays);
         }
         continue; // App is assigned, immediately skip the rest of the checks
       }
@@ -114,21 +110,9 @@ export default function TesterApps() {
       // STEP 3: Check status for 'Ongoing'
       if (appWithDays.status === 'Ongoing') {
         if (hasTested) {
-        categorizedApps.ongoing.push(appWithDays);
+          categorizedApps.ongoing.push(appWithDays);
         } else {
           // If not tested, and it's Ongoing, it goes to install.
-          // Ensure it's not production_access or completed (though previous checks should handle this)
-          if (!isProductionOrCompletedStatus) {
-            categorizedApps.install.push(appWithDays);
-          }
-        }
-        continue; // App is assigned, skip the rest
-      }
-
-      // STEP 4: Default categorization for any other apps (e.g., status is 'waiting' or undefined)
-      if (!hasTested) {
-        // Ensure it's not production_access or completed
-        if (!isProductionOrCompletedStatus) {
           categorizedApps.install.push(appWithDays);
         }
       }
@@ -395,55 +379,31 @@ const AppCard = ({ app, section, onInstallClick, viewMode }) => {
       className="w-full bg-gradient-to-br from-teal-100 via-white to-orange-100 rounded-[2rem] cursor-pointer p-0.5 flex flex-col"
       style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 15px 30px -15px rgba(0, 0, 0, 0.15)' }}
     >
-      <div className="bg-gradient-to-br from-white/90 to-white/70 rounded-t-[1.9rem] sm:rounded-[1.9rem] h-full w-full backdrop-blur-md flex-1">
+      <div className="bg-gradient-to-br from-white/90 to-white/70 rounded-[1.9rem] h-full w-full backdrop-blur-md flex flex-col flex-1">
         <div className="p-5 sm:pb-4">
-        {/* --- SHARED HEADER --- */}
-        <div className="flex items-start">
-          <div className="min-w-0">
-            <p className="text-[12px] text-slate-500">App Name</p>
-            <p className="text-base font-bold text-slate-900 mb-1 truncate">{finalAppName}</p>
-            <p className="text-[12px] text-slate-500">Status</p>
-            <p className="text-sm font-semibold text-slate-900">{currentStatus.label}</p>
-          </div>
-        </div>
-
-        {/* --- MOBILE LAYOUT (Default, hidden on sm+) --- */}
-        <div className="sm:hidden mt-4 space-y-4">
-          <div>
-            <p className="text-[13px] text-slate-500">Days Count</p>
-            <p className="text-base font-bold text-slate-900 mb-1.5">{daysCount} / {daysTarget} Days</p>
-            <ProgressBar progress={daysProgress} color="#0D9488" thumbColor="#0D9488" />
-          </div>
-          <div className="flex items-center text-[13px] font-medium text-slate-900">
-            <SlidersHorizontal className="w-4 h-4 mr-2 text-slate-500" />
-            {currentStatus.actionText}
-          </div>
-          <div>
-            <p className="text-[13px] text-slate-500">Testers Count</p>
-            <p className="text-base font-bold text-slate-900 mb-1.5">{testersCount} / {testersTarget} Testers</p>
-            <ProgressBar progress={testersProgress} color="#EA580C" thumbColor="#EA580C" />
-          </div>
-          <p className="text-[13px] text-slate-900">Active testers: {testersCount}</p>
-        </div>
-
-        {/* --- TABLET/PC LAYOUT (Hidden by default, visible on sm+) --- */}
-        <div className="hidden sm:block mt-4">
-          <div className="grid grid-cols-2 gap-5">
-            <div className="space-y-1.5">
-              <p className="text-base font-bold text-slate-900">{daysCount} / {daysTarget} Days</p>
-              <ProgressBar progress={daysProgress} color="#0D9488" thumbColor="#0D9488" />
+          {/* --- SHARED HEADER --- */}
+          <div className="flex items-start justify-between">
+            <div className="min-w-0 pr-4">
+              <p className="text-[12px] text-slate-500">App Name</p>
+              <p className="text-base font-bold text-slate-900 mb-1 truncate" title={finalAppName}>{finalAppName}</p>
+              <p className="text-[12px] text-slate-500 mt-2">Status</p>
+              <p className="text-sm font-semibold text-slate-900">{currentStatus.label}</p>
             </div>
-            <div className="space-y-1.5">
-              <p className="text-base font-bold text-slate-900">{testersCount} / {testersTarget} Testers</p>
-              <ProgressBar progress={testersProgress} color="#EA580C" thumbColor="#EA580C" />
+            <div className="text-right shrink-0">
+              <p className="text-[12px] text-slate-500">Days</p>
+              <p className="text-base font-bold text-slate-900 mb-1">
+                {daysCount}<span className="font-medium text-slate-400">/{daysTarget}</span>
+              </p>
+              <p className="text-[12px] text-slate-500 mt-2">Testers</p>
+              <p className="text-base font-bold text-slate-900">
+                {testersCount}<span className="font-medium text-slate-400">/{testersTarget}</span>
+              </p>
             </div>
           </div>
-        </div>
         </div>
       </div>
 
       {/* --- TABLET/PC FOOTER (Hidden by default, visible on sm+) --- */}
-      {/* This is now a sibling to the main card body, not a child, to prevent overlap */}
       <div className="hidden sm:flex items-center justify-between gap-6 bg-[#F8FAFC] border-t border-slate-200 px-5 py-3 rounded-b-[1.9rem]">
         <div className="flex items-center gap-2 text-[13px] font-medium text-slate-900">
           <SlidersHorizontal className="w-4 h-4 text-slate-500" />
