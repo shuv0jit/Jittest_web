@@ -423,7 +423,7 @@ export default function AdminApps() {
 
     if (Math.abs(distanceX) > Math.abs(distanceY)) {
       if (distanceX < -50 && touchStartX < 50) return;
-      const tabs = ['To Install', 'Ongoing', 'Reviews', 'Paid'];
+      const tabs = ['To Install', 'Ongoing', 'Production', 'Paid'];
       const currentIndex = tabs.indexOf(activeTab);
 
       if (distanceX > 50 && currentIndex < tabs.length - 1) setActiveTab(tabs[currentIndex + 1]);
