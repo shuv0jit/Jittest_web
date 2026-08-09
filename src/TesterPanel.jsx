@@ -172,10 +172,33 @@ export default function TesterPanel() {
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
+          const isNewTester = userData.createdAt?.toDate() >= NEW_LOGIC_CUTOFF_DATE;
           const totalAlreadyPaid = userData.totalPaidAmount || 0;
-          // Restore the original global calculation for all testers
-          const xAmountGlobal = globalPaidAppsCount * 50;
-          const newWithdrawable = Math.max(0, xAmountGlobal - totalAlreadyPaid);
+          let newWithdrawable = 0;
+
+          if (isNewTester) {
+            // New Logic: Calculate based on apps the new tester personally installed within their time window.
+            let personalXAmount = 0;
+            const testerJoinDate = userData.createdAt.toDate();
+            const eightDaysBeforeJoin = new Date(testerJoinDate.getTime() - 8 * 24 * 60 * 60 * 1000);
+
+            for (const app of allApps) {
+              const appCreationDate = app.createdAt?.toDate();
+              const hasTested = Array.isArray(app.testerIds) && app.testerIds.includes(currentUser.uid);
+
+              // Rule 1: App must be paid/completed.
+              // Rule 2: New tester must have installed it.
+              // Rule 3: App must have been created within 8 days of the tester joining.
+              if ((app.isPaidByAdmin || app.status === 'completed') && hasTested && appCreationDate && appCreationDate >= eightDaysBeforeJoin) {
+                personalXAmount += 50;
+              }
+            }
+            newWithdrawable = Math.max(0, personalXAmount - totalAlreadyPaid);
+          } else {
+            // Old Logic: Global calculation for old testers.
+            const xAmountGlobal = globalPaidAppsCount * 50;
+            newWithdrawable = Math.max(0, xAmountGlobal - totalAlreadyPaid);
+          }
           await updateDoc(userDocRef, { withdrawableBalance: newWithdrawable });
         }
       } catch (error) {}
