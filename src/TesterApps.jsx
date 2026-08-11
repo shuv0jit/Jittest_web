@@ -3,8 +3,8 @@ import { db } from './firebase';
 import { collection, onSnapshot, doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { Download, Clock, CheckCircle, CreditCard, PlaySquare, CheckCircle2, LayoutGrid, List, Search, AlertTriangle, SlidersHorizontal, Users } from 'lucide-react';
-import DynamicAppIcon from './DynamicAppIcon';
 import { motion, AnimatePresence } from 'framer-motion';
+import AppCard from './AppCard';
 
 export default function TesterApps() {
   const { currentUser, testerData } = useAuth(); // Get testerData from AuthContext
@@ -282,15 +282,13 @@ export default function TesterApps() {
             <p className="text-slate-400 font-medium mt-2">You're completely caught up in this section.</p>
           </motion.div>
         ) : (
-          <motion.div key="grid-state" variants={containerVariants} initial="hidden" animate="show" className={viewMode === 'grid' ? "grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4" : "flex flex-col gap-3"}>
+          <motion.div key="grid-state" variants={containerVariants} initial="hidden" animate="show" className={
+              viewMode === 'grid' 
+                ? "grid grid-cols-2 lg:grid-cols-3 gap-4" 
+                : "flex flex-col gap-4"
+            }>
             {currentApps.map((app) => (
-              <AppCard 
-                key={app.id} 
-                app={app} 
-                section={activeSubTab} 
-                onInstallClick={() => handleInstallClick(app)} 
-                viewMode={viewMode}
-              />
+              <AppCard key={app.id} app={app} section={activeSubTab} onInstallClick={() => handleInstallClick(app)} viewMode={viewMode}/>
             ))}
           </motion.div>
         )}
@@ -298,134 +296,3 @@ export default function TesterApps() {
     </div>
   );
 }
-
-const ProgressBar = ({ progress, color, thumbColor }) => {
-  return (
-    <div className="relative w-full h-2 rounded-lg bg-slate-200 overflow-hidden">
-      {/* Fill */}
-      <motion.div
-        className="h-full rounded-lg"
-        style={{ backgroundColor: color }}
-        initial={{ width: 0 }}
-        animate={{ width: `${progress}%` }}
-        transition={{ duration: 1.5, ease: "easeInOut" }}
-      />
-      {/* Thumb/Knob Indicator */}
-      <motion.div
-        className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-lg bg-white shadow-[0_2px_4px_rgba(0,0,0,0.15)]"
-        style={{
-          border: `3px solid ${thumbColor}`,
-          left: `${progress}%`,
-          transform: 'translate(-50%, -50%)',
-        }}
-        initial={{ left: '0%' }}
-        animate={{ left: `${progress}%` }}
-        transition={{ duration: 1.5, ease: "easeInOut" }}
-      />
-    </div>
-  );
-};
-
-const AppCard = ({ app, section, onInstallClick, viewMode }) => {
-  const pNameStr = typeof app.packageName === 'string' ? app.packageName : '';
-  const finalAppName = app.appName || (pNameStr ? pNameStr.split('.').pop() : 'Unknown Application');
-
-  // 1. Derive data from props to match the requested structure
-  const daysCount = section === 'install' ? 0 : app.daysActive;
-  const daysTarget = 14;
-  const testersCount = app.displayTesterCount;
-  const testersTarget = 12;
-  
-  // New status logic based on database field
-  let derivedStatus = section; // Start with the section name
-  if (app.isPaidByAdmin || app.status === 'completed') {
-    derivedStatus = 'paid';
-  } else if (app.status === 'production_access') {
-    derivedStatus = 'production';
-  } else if (section === 'ongoing') {
-    derivedStatus = 'ongoing';
-  }
-
-  const statusConfig = {
-    install: { label: 'To Install', actionText: 'Tap to install', icon: AlertTriangle },
-    ongoing: { label: 'Ongoing', actionText: 'Keep testing', icon: AlertTriangle },
-    production: { label: 'Production', actionText: 'Testing complete', icon: CheckCircle },
-    paid: { label: 'Paid', actionText: 'Payment processed', icon: CheckCircle, color: 'text-black-500' },
-  };
-
-  const currentStatus = statusConfig[derivedStatus] || statusConfig.install;
-
-  const daysProgress = Math.min(100, (daysCount / daysTarget) * 100);
-  const testersProgress = Math.min(100, (testersCount / testersTarget) * 100);
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 15 },
-    show: { opacity: 1, y: 0 }
-  };
-
-  const handleCardClick = () => {
-    if (section === 'install') {
-      onInstallClick();
-    } else if (pNameStr) {
-      window.open(`https://play.google.com/store/apps/details?id=${pNameStr}`, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  return (
-    <motion.div
-      variants={itemVariants}
-      onClick={handleCardClick}
-      className="w-full bg-gradient-to-br from-teal-100 via-white to-orange-100 rounded-[2rem] cursor-pointer p-0.5 flex flex-col"
-      style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 15px 30px -15px rgba(0, 0, 0, 0.15)' }}
-    >
-      <div className="bg-gradient-to-br from-white/90 to-white/70 rounded-[1.9rem] h-full w-full backdrop-blur-md flex flex-col flex-1 p-5">
-        <div className="p-5 sm:pb-4">
-          {/* --- SHARED HEADER --- */}
-          <div className="flex flex-col gap-3">
-            {/* Row 1: App Name */}
-            <div>
-              <p className="text-xs text-slate-500">App Name</p>
-              <p className="text-base font-bold text-slate-900 truncate" title={finalAppName}>{finalAppName}</p>
-            </div>
-            {/* Row 2: Counts */}
-            <div className="flex justify-between items-center">
-              <div>
-              <p className="text-[12px] text-slate-500">Days</p>
-                <p className="text-base font-bold">
-                  <span className={daysCount > 0 ? 'text-black-600' : 'text-slate-900'}>{daysCount}</span>
-                  <span className="font-medium text-slate-900">/{daysTarget}</span>
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[12px] text-slate-500">Testers</p>
-                <p className="text-base font-bold">
-                  <span className={testersCount < 12 ? 'text-red-600' : 'text-black-600'}>
-                    {testersCount}
-                  </span>
-                  <span className="font-medium text-slate-900">/{testersTarget}</span>
-                </p>
-              </div>
-            </div>
-            {/* Row 3: Status */}
-            <div>
-              <p className="text-xs text-slate-500">Status</p>
-              <p className="text-sm font-semibold text-slate-900">{currentStatus.label}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* --- TABLET/PC FOOTER (Hidden by default, visible on sm+) --- */}
-      <div className="hidden sm:flex items-center justify-between gap-6 bg-[#F8FAFC] border-t border-slate-200 px-5 py-3 rounded-b-[1.9rem]">
-        <div className="flex items-center gap-2 text-[13px] font-medium text-slate-900">
-          <SlidersHorizontal className="w-4 h-4 text-slate-500" />
-          {currentStatus.actionText}
-        </div>
-        <div className="flex items-center gap-2 text-[13px] font-medium text-slate-900">
-          <Users className="w-4 h-4 text-slate-500" />
-          Active testers: {testersCount}
-        </div>
-      </div>
-    </motion.div>
-  );
-};
