@@ -8,6 +8,9 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  query,
+  where,
+  documentId,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -114,7 +117,7 @@ function getInitials(name) {
 }
 
 export default function AdminTestingInfo() {
-  const [apps, setApps] = useState([]);
+ 
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState({});
   const [activeTesters, setActiveTesters] = useState([]);
@@ -142,62 +145,134 @@ export default function AdminTestingInfo() {
   // LOAD EVERYTHING
   // --------------------------------------------------
 
-  const loadData = async () => {
-    setLoading(true);
+  // --------------------------------------------------
+// LOAD DATA — OPTIMIZED / MINIMUM READS
+// --------------------------------------------------
 
-    try {
-      const [appsSnap, usersSnap, logsSnap, settingsSnap] =
-        await Promise.all([
-          getDocs(collection(db, 'apps')),
-          getDocs(collection(db, 'users')),
-          getDocs(collection(db, 'testingLogs')),
-          getDoc(doc(db, 'testingSettings', 'activeTesters')),
-        ]);
+const loadData = async () => {
+  setLoading(true);
 
-      const appsData = appsSnap.docs.map((d) => ({
+  try {
+    // ----------------------------------------------
+    // 1. READ ACTIVE TESTER SETTINGS — 1 READ
+    // ----------------------------------------------
+
+    const settingsRef = doc(
+      db,
+      'testingSettings',
+      'activeTesters'
+    );
+
+    const settingsSnap = await getDoc(settingsRef);
+
+    let savedActive = settingsSnap.exists()
+      ? settingsSnap.data().emails || []
+      : [];
+
+    // Special tester is always active
+    if (!savedActive.includes(SPECIAL_TESTER)) {
+      savedActive = [
+        ...savedActive,
+        SPECIAL_TESTER,
+      ];
+
+      await setDoc(
+        settingsRef,
+        {
+          emails: savedActive,
+        },
+        {
+          merge: true,
+        }
+      );
+    }
+
+    // ----------------------------------------------
+    // 2. READ ONLY TESTER USERS
+    // ----------------------------------------------
+
+    const testersQuery = query(
+      collection(db, 'users'),
+      where('role', '==', 'tester')
+    );
+
+    const usersSnap = await getDocs(testersQuery);
+
+    const usersData = usersSnap.docs
+      .map((d) => ({
         id: d.id,
         ...d.data(),
-      }));
+      }))
+      .filter((u) => u.email);
 
-      const usersData = usersSnap.docs
-        .map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }))
-        .filter((u) => u.email);
+    // ----------------------------------------------
+    // 3. READ ONLY ACTIVE TESTER LOGS
+    // ----------------------------------------------
+    // Instead of reading the entire testingLogs
+    // collection, read only the active testers.
 
-      const logsData = {};
+    const logsData = {};
+
+    const activeEmails = [
+      ...new Set(savedActive),
+    ];
+
+    // Firestore "in" supports max 30 values.
+    // Split active testers into groups of 30.
+
+    for (
+      let i = 0;
+      i < activeEmails.length;
+      i += 30
+    ) {
+      const emailBatch = activeEmails.slice(
+        i,
+        i + 30
+      );
+
+      if (!emailBatch.length) continue;
+
+      const logsQuery = query(
+        collection(db, 'testingLogs'),
+        where(
+          documentId(),
+          'in',
+          emailBatch
+        )
+      );
+
+      const logsSnap = await getDocs(
+        logsQuery
+      );
 
       logsSnap.forEach((d) => {
         logsData[d.id] = d.data();
       });
-
-      let savedActive = settingsSnap.exists()
-        ? settingsSnap.data().emails || []
-        : [];
-
-      if (!savedActive.includes(SPECIAL_TESTER)) {
-        savedActive = [...savedActive, SPECIAL_TESTER];
-
-        await setDoc(
-          doc(db, 'testingSettings', 'activeTesters'),
-          { emails: savedActive },
-          { merge: true }
-        );
-      }
-
-      setApps(appsData);
-      setUsers(usersData);
-      setLogs(logsData);
-      setActiveTesters(savedActive);
-      setSelectedActive(savedActive);
-    } catch (error) {
-      console.error('Admin testing load error:', error);
-      alert('Could not load testing information.');
-    } finally {
-      setLoading(false);
     }
-  };
+
+    // ----------------------------------------------
+    // SAVE EVERYTHING IN LOCAL STATE
+    // ----------------------------------------------
+
+    setUsers(usersData);
+    setLogs(logsData);
+
+    setActiveTesters(savedActive);
+    setSelectedActive(savedActive);
+
+  } catch (error) {
+    console.error(
+      'Admin testing load error:',
+      error
+    );
+
+    alert(
+      'Could not load testing information.'
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadData();
@@ -208,17 +283,79 @@ export default function AdminTestingInfo() {
   // --------------------------------------------------
 
  
-  const appMap = useMemo(() => {
-    const map = {};
+ const [appCache, setAppCache] = useState({});
+const [loadingApps, setLoadingApps] = useState(false);
+const loadAppsForTester = async (tester) => {
+  if (!tester) return;
 
-    apps.forEach((app) => {
-      if (app?.id) {
-        map[app.id] = app;
+  const appIds = new Set();
+
+  tester.dailyData?.forEach((day) => {
+    day.testedApps?.forEach((appId) => {
+      if (appId) {
+        appIds.add(appId);
       }
     });
+  });
 
-    return map;
-  }, [apps]);
+  const missingIds = [...appIds].filter(
+    (id) => !appCache[id]
+  );
+
+  // Everything already cached
+  if (!missingIds.length) return;
+
+  setLoadingApps(true);
+
+  try {
+    const fetchedApps = {};
+
+    // Firestore "in" maximum = 30 IDs
+    for (
+      let i = 0;
+      i < missingIds.length;
+      i += 30
+    ) {
+      const batch = missingIds.slice(
+        i,
+        i + 30
+      );
+
+      const appsQuery = query(
+        collection(db, 'apps'),
+        where(
+          documentId(),
+          'in',
+          batch
+        )
+      );
+
+      const snap = await getDocs(
+        appsQuery
+      );
+
+      snap.forEach((d) => {
+        fetchedApps[d.id] = {
+          id: d.id,
+          ...d.data(),
+        };
+      });
+    }
+
+    setAppCache((prev) => ({
+      ...prev,
+      ...fetchedApps,
+    }));
+
+  } catch (error) {
+    console.error(
+      'App cache load error:',
+      error
+    );
+  } finally {
+    setLoadingApps(false);
+  }
+};
 
   // --------------------------------------------------
   // TESTER LIST
@@ -272,8 +409,7 @@ export default function AdminTestingInfo() {
   // --------------------------------------------------
   // TODAY
   // --------------------------------------------------
-
-  const activeTesterData = useMemo(() => {
+const activeTesterData = useMemo(() => {
     return activeTesters
       .map((email) => {
         const user =
@@ -301,13 +437,8 @@ export default function AdminTestingInfo() {
       });
   }, [activeTesters, testerList, logs, today]);
 
-  const todayComplete = activeTesterData.filter(
-    (t) => t.complete
-  );
-
-  const todayNotTested = activeTesterData.filter(
-    (t) => !t.complete
-  );
+  const todayComplete = activeTesterData.filter((t) => t.complete);
+  const todayNotTested = activeTesterData.filter((t) => !t.complete);
 
   // --------------------------------------------------
   // MISSED REPORT
@@ -350,19 +481,19 @@ export default function AdminTestingInfo() {
       })
       .filter((t) => t.missedCount > 0)
       .sort((a, b) => b.missedCount - a.missedCount);
-  }, [
-    activeTesters,
-    testerList,
-    reportDates,
-    logs,
-  ]);
+  }, [activeTesters, testerList, reportDates, logs]);
 
   // --------------------------------------------------
   // OVERALL DATA
   // --------------------------------------------------
 
   const overallTesterData = useMemo(() => {
-    const dates = getDatesBetween(START_DATE, today);
+    // ONLY FINISHED DAYS COUNT TOWARD TESTED/MISSED
+    // Today remains live/pending and is NOT counted.
+    const finalizedDates =
+      dateObj(START_DATE) <= dateObj(yesterday)
+        ? getDatesBetween(START_DATE, yesterday)
+        : [];
 
     return activeTesters
       .map((email) => {
@@ -372,7 +503,11 @@ export default function AdminTestingInfo() {
             name: email.split('@')[0],
           };
 
-        const dailyData = dates.map((date) => {
+        // ------------------------------------------
+        // FINISHED DAYS ONLY
+        // ------------------------------------------
+
+        const dailyData = finalizedDates.map((date) => {
           const testedApps = getTestedApps(email, date);
 
           return {
@@ -383,20 +518,19 @@ export default function AdminTestingInfo() {
           };
         });
 
-        const testedDays = dailyData.filter(
-          (d) => d.complete
-        ).length;
+        const testedDays = dailyData.filter((d) => d.complete).length;
+        const missedDays = dailyData.filter((d) => !d.complete).length;
+        const totalDays = finalizedDates.length;
 
-        const missedDays = dailyData.filter(
-          (d) => !d.complete
-        ).length;
+        const ratio = totalDays > 0 ? testedDays / totalDays : 0;
 
-        const totalDays = dates.length;
+        // ------------------------------------------
+        // TODAY — LIVE STATUS ONLY
+        // DOES NOT AFFECT RATIO
+        // ------------------------------------------
 
-        const ratio =
-          totalDays > 0
-            ? testedDays / totalDays
-            : 0;
+        const todayApps = getTestedApps(email, today);
+        const testedToday = todayApps.length > 0;
 
         return {
           ...user,
@@ -405,6 +539,8 @@ export default function AdminTestingInfo() {
           missedDays,
           totalDays,
           ratio,
+          todayApps,
+          testedToday,
         };
       })
       .sort((a, b) => {
@@ -418,13 +554,7 @@ export default function AdminTestingInfo() {
 
         return b.testedDays - a.testedDays;
       });
-  }, [
-    activeTesters,
-    testerList,
-    logs,
-    today,
-  ]);
-
+  }, [activeTesters, testerList, logs, today, yesterday]);
   // --------------------------------------------------
   // ACTIVE TESTER SAVE
   // --------------------------------------------------
@@ -496,9 +626,58 @@ export default function AdminTestingInfo() {
 
       tested[today] = [];
 
-      await updateDoc(logRef, {
+     const removeTesterToday = async (email) => {
+  if (
+    !window.confirm(
+      `Remove ${email} from today's testing?`
+    )
+  ) {
+    return;
+  }
+
+  try {
+    const logRef = doc(
+      db,
+      'testingLogs',
+      email
+    );
+
+    const snap = await getDoc(logRef);
+
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+
+    const tested = {
+      ...(data.tested || {}),
+    };
+
+    tested[today] = [];
+
+    await updateDoc(logRef, {
+      tested,
+    });
+
+    // ----------------------------------------------
+    // UPDATE LOCAL STATE ONLY
+    // NO FULL RELOAD
+    // ----------------------------------------------
+
+    setLogs((prev) => ({
+      ...prev,
+      [email]: {
+        ...prev[email],
         tested,
-      });
+      },
+    }));
+
+  } catch (error) {
+    console.error(error);
+    alert(
+      'Could not remove tester from today.'
+    );
+  }
+};
 
       await loadData();
     } catch (error) {
@@ -527,17 +706,18 @@ export default function AdminTestingInfo() {
   // --------------------------------------------------
 
   const calendarDates = useMemo(() => {
-    if (!calendarTester) return [];
+  if (!calendarTester) return [];
 
-    return getDatesBetween(
-      START_DATE,
-      today
-    );
-  }, [calendarTester, today]);
+  return getDatesBetween(
+    START_DATE,
+    today
+  );
+}, [calendarTester, today]);
 
-  const openCalendar = (tester) => {
-    setCalendarTester(tester);
-  };
+ const openCalendar = async (tester) => {
+  setCalendarTester(tester);
+  await loadAppsForTester(tester);
+};
 
   // --------------------------------------------------
   // STYLES
@@ -1513,13 +1693,15 @@ export default function AdminTestingInfo() {
                 {calendarDates.map((date) => {
 
                   const testedApps =
-                    getTestedApps(
-                      calendarTester.email,
-                      date
-                    );
+  getTestedApps(
+    calendarTester.email,
+    date
+  );
 
-                  const tested =
-                    testedApps.length > 0;
+const tested =
+  testedApps.length > 0;
+
+const isToday = date === today;
 
                   return (
                     <div
@@ -1535,25 +1717,31 @@ export default function AdminTestingInfo() {
                       }`}
                     >
 
-                      <div className="flex items-center justify-between">
-
-                        <span className="text-[9px] font-medium text-slate-400">
-                          {formatDate(date)}
-                        </span>
-
-                        {tested ? (
-                          <CheckCircle2
-                            size={13}
-                            className="text-emerald-500"
-                          />
-                        ) : (
-                          <X
-                            size={13}
-                            className="text-red-400"
-                          />
-                        )}
-
-                      </div>
+                      <div className="mt-1.5 text-[10px] font-medium text-amber-500">
+    {tested
+      ? `${testedApps.length} ${
+          testedApps.length === 1
+            ? 'app'
+            : 'apps'
+        }`
+      : 'Pending'}
+  </div>
+) : (
+  <div
+    className={`mt-1.5 text-[10px] font-medium ${
+      tested
+        ? 'text-emerald-500'
+        : 'text-red-500'
+    }`}
+  >
+    {tested
+      ? `${testedApps.length} ${
+          testedApps.length === 1
+            ? 'app'
+            : 'apps'
+        }`
+      : 'Missed'}
+  </div>
 
                       <div
                         className={`mt-1.5 text-[10px] font-medium ${
@@ -1582,9 +1770,9 @@ export default function AdminTestingInfo() {
                                 className="text-[8px] text-slate-400 truncate"
                               >
                                 ✓{' '}
-                                {appMap[appId]
-                                  ?.appName ||
-                                  appId}
+                                {appCache[appId]
+  ?.appName ||
+  appId}
                               </div>
                             )
                           )}
