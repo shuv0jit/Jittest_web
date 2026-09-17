@@ -14,18 +14,17 @@ import { db } from './firebase';
 import {
   Check,
   X,
-  Users,
-  CalendarDays,
-  Moon,
-  Sun,
   Filter,
   UserCheck,
   UserX,
   RefreshCw,
   Trash2,
-  Clock,
+  CalendarDays,
+  Moon,
+  Sun,
   CheckCircle2,
   AlertCircle,
+  ChevronRight,
 } from 'lucide-react';
 
 const START_DATE = '2026-09-17';
@@ -105,6 +104,15 @@ function getTesterName(user) {
   );
 }
 
+function getInitials(name) {
+  return name
+    .split(' ')
+    .map((x) => x[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
 export default function AdminTestingInfo() {
   const [apps, setApps] = useState([]);
   const [users, setUsers] = useState([]);
@@ -118,7 +126,6 @@ export default function AdminTestingInfo() {
   const [notTestedModal, setNotTestedModal] = useState(false);
 
   const [calendarTester, setCalendarTester] = useState(null);
-  const [calendarDate, setCalendarDate] = useState(getBDDate());
 
   const [missedFilter, setMissedFilter] = useState('all');
 
@@ -165,12 +172,10 @@ export default function AdminTestingInfo() {
         logsData[d.id] = d.data();
       });
 
-      let savedActive =
-        settingsSnap.exists()
-          ? settingsSnap.data().emails || []
-          : [];
+      let savedActive = settingsSnap.exists()
+        ? settingsSnap.data().emails || []
+        : [];
 
-      // Shuvojit is always active
       if (!savedActive.includes(SPECIAL_TESTER)) {
         savedActive = [...savedActive, SPECIAL_TESTER];
 
@@ -199,25 +204,19 @@ export default function AdminTestingInfo() {
   }, []);
 
   // --------------------------------------------------
-  // ACTIVE ONGOING APPS
+  // APP DATA
   // --------------------------------------------------
 
-  const ongoingApps = useMemo(() => {
-    return apps.filter((app) => {
-      const status = typeof app?.status === 'string' ? app.status.trim() : '';
-      return status === 'Ongoing';
-    });
-  }, [apps]);
-
-  const ongoingCount = ongoingApps.length;
-
+ 
   const appMap = useMemo(() => {
     const map = {};
+
     apps.forEach((app) => {
       if (app?.id) {
         map[app.id] = app;
       }
     });
+
     return map;
   }, [apps]);
 
@@ -266,7 +265,6 @@ export default function AdminTestingInfo() {
       : [];
   };
 
-  // Tested if at least 1 app was tested on that date
   const hasTestedSomething = (email, date) => {
     return getTestedApps(email, date).length > 0;
   };
@@ -312,7 +310,7 @@ export default function AdminTestingInfo() {
   );
 
   // --------------------------------------------------
-  // MISSED REPORT (PAST DAYS ONLY: YESTERDAY, DAY BEFORE, TILL NOW)
+  // MISSED REPORT
   // --------------------------------------------------
 
   const reportDates = useMemo(() => {
@@ -324,7 +322,6 @@ export default function AdminTestingInfo() {
       return [getDayBeforeYesterday()];
     }
 
-    // "Till now" strictly counts completed days up to yesterday
     if (dateObj(START_DATE) > dateObj(yesterday)) {
       return [];
     }
@@ -353,10 +350,15 @@ export default function AdminTestingInfo() {
       })
       .filter((t) => t.missedCount > 0)
       .sort((a, b) => b.missedCount - a.missedCount);
-  }, [activeTesters, testerList, reportDates, logs]);
+  }, [
+    activeTesters,
+    testerList,
+    reportDates,
+    logs,
+  ]);
 
   // --------------------------------------------------
-  // OVERALL RANKING (UP TO TODAY)
+  // OVERALL DATA
   // --------------------------------------------------
 
   const overallTesterData = useMemo(() => {
@@ -416,7 +418,12 @@ export default function AdminTestingInfo() {
 
         return b.testedDays - a.testedDays;
       });
-  }, [activeTesters, testerList, logs, today]);
+  }, [
+    activeTesters,
+    testerList,
+    logs,
+    today,
+  ]);
 
   // --------------------------------------------------
   // ACTIVE TESTER SAVE
@@ -463,7 +470,7 @@ export default function AdminTestingInfo() {
   };
 
   // --------------------------------------------------
-  // REMOVE TESTER FROM TODAY
+  // REMOVE TESTER TODAY
   // --------------------------------------------------
 
   const removeTesterToday = async (email) => {
@@ -482,6 +489,7 @@ export default function AdminTestingInfo() {
       if (!snap.exists()) return;
 
       const data = snap.data();
+
       const tested = {
         ...(data.tested || {}),
       };
@@ -505,8 +513,13 @@ export default function AdminTestingInfo() {
 
   const toggleDark = () => {
     const next = !darkMode;
+
     setDarkMode(next);
-    localStorage.setItem('adminTestingDark', String(next));
+
+    localStorage.setItem(
+      'adminTestingDark',
+      String(next)
+    );
   };
 
   // --------------------------------------------------
@@ -524,8 +537,23 @@ export default function AdminTestingInfo() {
 
   const openCalendar = (tester) => {
     setCalendarTester(tester);
-    setCalendarDate(today);
   };
+
+  // --------------------------------------------------
+  // STYLES
+  // --------------------------------------------------
+
+  const page = darkMode
+    ? 'bg-[#080b12] text-slate-200'
+    : 'bg-[#f7f9fc] text-slate-700';
+
+  const card = darkMode
+    ? 'bg-[#10151f] border-slate-800/80'
+    : 'bg-white border-slate-200/80';
+
+  const muted = darkMode
+    ? 'text-slate-500'
+    : 'text-slate-400';
 
   // --------------------------------------------------
   // UI
@@ -533,467 +561,597 @@ export default function AdminTestingInfo() {
 
   return (
     <div
-      className={`font-sans ${
-        darkMode
-          ? 'min-h-screen bg-slate-950 text-white'
-          : 'min-h-screen bg-slate-50 text-slate-900'
-      }`}
+      className={`min-h-screen ${page}`}
+      style={{
+        fontFamily:
+          '"Inter", "SF Pro Display", "Segoe UI", sans-serif',
+      }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6">
 
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        {/* ============================================
+            HEADER
+        ============================================ */}
+
+        <header className="flex items-center justify-between mb-5">
 
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Testing Report
-            </h1>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
 
-            <p
-              className={
-                darkMode
-                  ? 'text-slate-400 mt-1'
-                  : 'text-slate-500 mt-1'
-              }
-            >
-              Daily tester activity from 17 September
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-
-            <button
-              onClick={toggleDark}
-              className={`p-2.5 rounded-xl border transition ${
-                darkMode
-                  ? 'border-slate-700 bg-slate-900 hover:bg-slate-800'
-                  : 'border-blue-100 bg-white hover:bg-blue-50'
-              }`}
-              title="Toggle night mode"
-            >
-              {darkMode ? (
-                <Sun size={18} />
-              ) : (
-                <Moon size={18} />
-              )}
-            </button>
-
-            <button
-              onClick={loadData}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
-            >
-              <RefreshCw size={16} />
-              Refresh
-            </button>
-
-          </div>
-        </div>
-
-        {/* TOP CONTROL BAR */}
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
-
-          {/* ACTIVE TESTERS */}
-          <button
-            onClick={() => setActiveModal(true)}
-            className={`text-left p-5 rounded-2xl border transition ${
-              darkMode
-                ? 'bg-slate-900 border-slate-800 hover:border-blue-500'
-                : 'bg-white border-blue-100 hover:border-blue-300 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-
-              <div>
-                <div className="flex items-center gap-2 text-blue-500 font-bold text-sm">
-                  <UserCheck size={17} />
-                  ACTIVE TESTERS
-                </div>
-
-                <div className="text-3xl font-extrabold mt-1">
-                  {activeTesters.length}
-                </div>
-
-                <div
-                  className={
-                    darkMode
-                      ? 'text-slate-400 text-sm'
-                      : 'text-slate-500 text-sm'
-                  }
-                >
-                  testers included in reports
-                </div>
-              </div>
-
-              <Filter
-                size={25}
-                className="text-blue-500"
-              />
-
+              <h1
+                className={`text-lg sm:text-xl font-semibold tracking-tight ${
+                  darkMode
+                    ? 'text-slate-100'
+                    : 'text-slate-800'
+                }`}
+              >
+                Testing
+              </h1>
             </div>
-          </button>
-
-          {/* ONGOING APPS */}
-          <div
-            className={`p-5 rounded-2xl border ${
-              darkMode
-                ? 'bg-slate-900 border-slate-800'
-                : 'bg-white border-blue-100 shadow-sm'
-            }`}
-          >
-           
-          </div>
-
-        </div>
-
-        {/* TODAY HEADER */}
-        <div className="flex items-center justify-between mb-4">
-
-          <div>
-            <h2 className="text-xl font-extrabold">
-              Tested Today
-            </h2>
 
             <p
-              className={
-                darkMode
-                  ? 'text-slate-400 text-sm'
-                  : 'text-slate-500 text-sm'
-              }
+              className={`text-[11px] mt-0.5 ${muted}`}
             >
               {formatDate(today)}
             </p>
           </div>
 
-          <button
-            onClick={() => setNotTestedModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-red-200 text-red-600 font-bold text-sm hover:bg-red-50"
-          >
-            <UserX size={16} />
-            Not Tested
-            <span className="bg-red-100 px-2 py-0.5 rounded-full">
-              {todayNotTested.length}
-            </span>
-          </button>
+          <div className="flex items-center gap-1.5">
 
-        </div>
-
-        {/* TESTED TODAY CIRCLES */}
-        <div className="flex flex-wrap gap-4 mb-8">
-
-          {todayComplete.length === 0 && (
-            <div
-              className={`w-full p-6 rounded-2xl border text-center ${
+            <button
+              onClick={toggleDark}
+              title="Toggle night mode"
+              className={`w-8 h-8 rounded-lg border flex items-center justify-center transition ${
                 darkMode
-                  ? 'bg-slate-900 border-slate-800 text-slate-400'
-                  : 'bg-white border-blue-100 text-slate-500'
+                  ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  : 'bg-white border-slate-200 text-slate-500 hover:text-blue-600'
               }`}
             >
-              No tester has completed testing yet today.
-            </div>
-          )}
+              {darkMode ? (
+                <Sun size={15} />
+              ) : (
+                <Moon size={15} />
+              )}
+            </button>
 
-          {todayComplete.map((tester) => (
-            <div
-              key={tester.email}
-              className="flex flex-col items-center"
-            >
-              <button
-                onClick={() => openCalendar(tester)}
-                className="relative w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center font-extrabold text-lg shadow-lg hover:scale-105 transition"
-              >
-                {tester.name
-                  .split(' ')
-                  .map((x) => x[0])
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase()}
-
-                <span className="absolute -right-1 -bottom-1 w-7 h-7 rounded-full bg-emerald-500 border-4 border-white flex items-center justify-center">
-                  <Check size={14} />
-                </span>
-              </button>
-
-              <span className="mt-2 text-sm font-bold text-center max-w-[100px] truncate">
-                {tester.name}
-              </span>
-
-              <span className="text-xs text-emerald-500 font-semibold">
-                {tester.testedCount} {tester.testedCount === 1 ? 'app' : 'apps'} tested
-              </span>
-            </div>
-          ))}
-
-        </div>
-
-        {/* TESTING MISSED */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-
-          <div>
-            <h2 className="text-xl font-extrabold">
-              Testing Missed
-            </h2>
-
-            <p
-              className={
+            <button
+              onClick={loadData}
+              title="Refresh"
+              className={`w-8 h-8 rounded-lg border flex items-center justify-center transition ${
                 darkMode
-                  ? 'text-slate-400 text-sm'
-                  : 'text-slate-500 text-sm'
-              }
+                  ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-blue-400'
+                  : 'bg-white border-slate-200 text-slate-500 hover:text-blue-600'
+              }`}
             >
-              Testers who missed tests (past dates only)
-            </p>
+              <RefreshCw size={15} />
+            </button>
+
           </div>
 
-          <div className="flex flex-wrap gap-2">
+        </header>
 
-            {[
-              ['yesterday', 'Yesterday'],
-              ['dayBefore', 'Day before'],
-              ['all', 'Till now'],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => setMissedFilter(value)}
-                className={`px-3 py-2 rounded-lg text-xs font-bold border ${
-                  missedFilter === value
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : darkMode
-                    ? 'bg-slate-900 border-slate-700 text-slate-300'
-                    : 'bg-white border-blue-100 text-slate-600'
+        {/* ============================================
+            COMPACT ACTIVE BAR
+        ============================================ */}
+
+        <button
+          onClick={() => setActiveModal(true)}
+          className={`w-full mb-5 px-3.5 py-2.5 rounded-xl border flex items-center justify-between transition ${
+            card
+          } hover:border-blue-300`}
+        >
+
+          <div className="flex items-center gap-2.5 min-w-0">
+
+            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <UserCheck size={14} />
+            </div>
+
+            <div className="flex items-center gap-2 min-w-0">
+
+              <span
+                className={`text-xs font-medium ${
+                  darkMode
+                    ? 'text-slate-300'
+                    : 'text-slate-600'
                 }`}
               >
-                {label}
-              </button>
-            ))}
+                Active testers
+              </span>
+
+              <span className="text-sm font-semibold text-blue-600">
+                {activeTesters.length}
+              </span>
+
+             
+
+            </div>
 
           </div>
-        </div>
 
-        {/* MISSED CARDS */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
+          <div
+            className={`flex items-center gap-1 text-[10px] font-medium ${
+              darkMode
+                ? 'text-slate-500'
+                : 'text-slate-400'
+            }`}
+          >
+            Manage
+            <ChevronRight size={13} />
+          </div>
 
-          {missedData.length === 0 && (
-            <div
-              className={`col-span-full p-6 rounded-2xl border text-center ${
-                darkMode
-                  ? 'bg-slate-900 border-slate-800 text-slate-400'
-                  : 'bg-white border-blue-100 text-slate-500'
-              }`}
-            >
-              No missed testing in this period.
-            </div>
-          )}
+        </button>
 
-          {missedData.map((tester) => (
-            <button
-              key={tester.email}
-              onClick={() => openCalendar(tester)}
-              className={`text-left p-4 rounded-2xl border transition ${
-                darkMode
-                  ? 'bg-slate-900 border-slate-800 hover:border-blue-500'
-                  : 'bg-white border-blue-100 hover:border-blue-300 shadow-sm'
-              }`}
-            >
-              <div className="flex items-center justify-between">
+        {/* ============================================
+            TESTED TODAY
+        ============================================ */}
 
-                <div className="flex items-center gap-3">
+        <section className="mb-7">
 
-                  <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                    {tester.name
-                      .split(' ')
-                      .map((x) => x[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </div>
+          <div className="flex items-end justify-between mb-2.5">
 
-                  <div>
-                    <div className="font-bold">
-                      {tester.name}
-                    </div>
+            <div>
+              <div className="flex items-center gap-2">
 
-                    <div className="text-xs text-slate-400">
-                      {tester.email}
-                    </div>
-                  </div>
+                <h2
+                  className={`text-[15px] font-semibold ${
+                    darkMode
+                      ? 'text-slate-200'
+                      : 'text-slate-800'
+                  }`}
+                >
+                  Tested today
+                </h2>
 
-                </div>
-
-                <div className="text-red-500 font-extrabold">
-                  {tester.missedCount} {tester.missedCount === 1 ? 'day' : 'days'}
-                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 font-medium">
+                  {todayComplete.length}/{activeTesters.length}
+                </span>
 
               </div>
+
+              <p
+                className={`text-[10px] mt-0.5 ${muted}`}
+              >
+                Tap a tester to view history
+              </p>
+            </div>
+
+            <button
+              onClick={() => setNotTestedModal(true)}
+              className="flex items-center gap-1.5 text-[10px] font-medium text-red-500 hover:text-red-600"
+            >
+              <UserX size={13} />
+              Missed
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-50 flex items-center justify-center text-[9px]">
+                {todayNotTested.length}
+              </span>
             </button>
-          ))}
 
-        </div>
-
-        {/* ALL TESTERS */}
-        <div className="flex items-center justify-between mb-4">
-
-          <div>
-            <h2 className="text-xl font-extrabold">
-              All Testers
-            </h2>
-
-            <p
-              className={
-                darkMode
-                  ? 'text-slate-400 text-sm'
-                  : 'text-slate-500 text-sm'
-              }
-            >
-              Performance from 17 September
-            </p>
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-blue-500 font-bold">
-            <Clock size={16} />
-            {formatDate(START_DATE)}
-          </div>
+          {/* HORIZONTAL TESTER STRIP */}
 
-        </div>
+          <div
+            className={`w-full overflow-x-auto scrollbar-hide ${
+              todayComplete.length
+                ? ''
+                : 'overflow-hidden'
+            }`}
+            style={{
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+            }}
+          >
 
-        <div className="space-y-3">
+            <div className="flex gap-2.5 min-w-max pb-1">
 
-          {overallTesterData.map((tester, index) => (
-
-            <div
-              key={tester.email}
-              className={`p-4 rounded-2xl border ${
-                darkMode
-                  ? 'bg-slate-900 border-slate-800'
-                  : 'bg-white border-blue-100 shadow-sm'
-              }`}
-            >
-
-              <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-
-                {/* RANK + NAME */}
-                <div className="flex items-center gap-3 lg:w-[280px]">
-
-                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-extrabold text-sm">
-                    {index + 1}
-                  </div>
-
-                  <div className="w-11 h-11 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-bold">
-                    {tester.name
-                      .split(' ')
-                      .map((x) => x[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="font-extrabold truncate">
-                      {tester.name}
-                    </div>
-
-                    <div className="text-xs text-slate-400 truncate">
-                      {tester.email}
-                    </div>
-                  </div>
-
+              {todayComplete.length === 0 ? (
+                <div
+                  className={`px-4 py-3 rounded-xl border text-[11px] ${card} ${muted}`}
+                >
+                  No tester has tested yet today.
                 </div>
+              ) : (
+                todayComplete.map((tester) => (
+                  <button
+                    key={tester.email}
+                    onClick={() =>
+                      openCalendar(tester)
+                    }
+                    className="group flex flex-col items-center w-[58px] sm:w-[64px]"
+                  >
 
-                {/* PROGRESS */}
-                <div className="flex-1">
+                    <div className="relative">
 
-                  <div className="flex items-center justify-between mb-2">
+                      <div
+                        className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-[11px] font-semibold transition group-hover:scale-105 ${
+                          darkMode
+                            ? 'bg-blue-950 text-blue-300 ring-1 ring-blue-900'
+                            : 'bg-blue-50 text-blue-600 ring-1 ring-blue-100'
+                        }`}
+                      >
+                        {getInitials(
+                          tester.name
+                        )}
+                      </div>
 
-                    <span className="text-xs font-bold text-slate-400">
-                      DAILY COMPLETION
-                    </span>
+                      <span
+                        className={`absolute -right-0.5 -bottom-0.5 w-4 h-4 rounded-full flex items-center justify-center border-2 ${
+                          darkMode
+                            ? 'bg-emerald-500 border-[#10151f]'
+                            : 'bg-emerald-500 border-[#f7f9fc]'
+                        }`}
+                      >
+                        <Check
+                          size={9}
+                          strokeWidth={3}
+                          className="text-white"
+                        />
+                      </span>
+
+                    </div>
 
                     <span
-                      className={`text-sm font-extrabold ${
-                        tester.missedDays === 0
-                          ? 'text-emerald-500'
-                          : 'text-blue-600'
+                      className={`w-full mt-1.5 text-[9px] font-medium text-center truncate ${
+                        darkMode
+                          ? 'text-slate-300'
+                          : 'text-slate-600'
                       }`}
                     >
-                      {tester.testedDays}/{tester.totalDays}
+                      {tester.name}
                     </span>
 
-                  </div>
-
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-
-                    <div
-                      className="h-full bg-blue-600 rounded-full transition-all"
-                      style={{
-                        width: `${Math.max(
-                          0,
-                          Math.min(
-                            tester.ratio * 100,
-                            100
-                          )
-                        )}%`,
-                      }}
-                    />
-
-                  </div>
-
-                  <div className="flex gap-3 mt-2 text-xs">
-
-                    <span className="text-emerald-500 font-bold">
-                      {tester.testedDays} completed
+                    <span className="text-[8px] text-emerald-500 mt-0.5">
+                      {tester.testedCount} tested
                     </span>
 
-                    <span className="text-red-500 font-bold">
-                      {tester.missedDays} missed
-                    </span>
-
-                  </div>
-
-                </div>
-
-                {/* TODAY */}
-                <div className="flex items-center gap-2">
-
-                  {hasTestedSomething(tester.email, today) ? (
-                    <span className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold">
-                      <CheckCircle2 size={15} />
-                      Tested today
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 text-red-600 text-xs font-bold">
-                      <AlertCircle size={15} />
-                      Not tested
-                    </span>
-                  )}
-
-                  <button
-                    onClick={() => openCalendar(tester)}
-                    className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
-                    title="View calendar"
-                  >
-                    <CalendarDays size={17} />
                   </button>
-
-                  {activeTesters.includes(tester.email) && (
-                    <button
-                      onClick={() =>
-                        removeTesterToday(tester.email)
-                      }
-                      className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100"
-                      title="Remove from today's testing"
-                    >
-                      <Trash2 size={17} />
-                    </button>
-                  )}
-
-                </div>
-
-              </div>
+                ))
+              )}
 
             </div>
 
-          ))}
+          </div>
 
-        </div>
+        </section>
+
+        {/* ============================================
+            MISSED TESTING
+        ============================================ */}
+
+        <section className="mb-7">
+
+          <div className="flex items-center justify-between mb-2.5">
+
+            <div>
+              <h2
+                className={`text-[15px] font-semibold ${
+                  darkMode
+                    ? 'text-slate-200'
+                    : 'text-slate-800'
+                }`}
+              >
+                Missed testing
+              </h2>
+
+              <p
+                className={`text-[10px] mt-0.5 ${muted}`}
+              >
+                Past days
+              </p>
+            </div>
+
+            {/* SMALL FILTER */}
+
+            <div
+              className={`flex items-center gap-0.5 p-0.5 rounded-lg border ${
+                darkMode
+                  ? 'bg-slate-900 border-slate-800'
+                  : 'bg-white border-slate-200'
+              }`}
+            >
+
+              <Filter
+                size={12}
+                className="ml-1 text-slate-400"
+              />
+
+              {[
+                ['yesterday', 'Yesterday'],
+                ['dayBefore', 'Before'],
+                ['all', 'All'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() =>
+                    setMissedFilter(value)
+                  }
+                  className={`px-2 py-1 rounded-md text-[9px] font-medium transition ${
+                    missedFilter === value
+                      ? 'bg-blue-600 text-white'
+                      : darkMode
+                      ? 'text-slate-500 hover:text-slate-300'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+
+            </div>
+
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+
+            {missedData.length === 0 ? (
+              <div
+                className={`col-span-full px-4 py-3 rounded-xl border text-[11px] ${card} text-emerald-500`}
+              >
+                No missed testing in this period.
+              </div>
+            ) : (
+              missedData.map((tester) => (
+                <button
+                  key={tester.email}
+                  onClick={() =>
+                    openCalendar(tester)
+                  }
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition hover:border-red-200 ${card}`}
+                >
+
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-semibold ${
+                      darkMode
+                        ? 'bg-red-950 text-red-300'
+                        : 'bg-red-50 text-red-500'
+                    }`}
+                  >
+                    {getInitials(
+                      tester.name
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+
+                    <div
+                      className={`text-[11px] font-medium truncate ${
+                        darkMode
+                          ? 'text-slate-300'
+                          : 'text-slate-700'
+                      }`}
+                    >
+                      {tester.name}
+                    </div>
+
+                    <div
+                      className={`text-[9px] truncate ${muted}`}
+                    >
+                      {tester.email}
+                    </div>
+
+                  </div>
+
+                  <div className="text-right shrink-0">
+
+                    <div className="text-[13px] font-semibold text-red-500">
+                      {tester.missedCount}
+                    </div>
+
+                    <div
+                      className={`text-[8px] ${muted}`}
+                    >
+                      missed
+                    </div>
+
+                  </div>
+
+                </button>
+              ))
+            )}
+
+          </div>
+
+        </section>
+
+        {/* ============================================
+            ALL TESTERS
+        ============================================ */}
+
+        <section>
+
+          <div className="flex items-center justify-between mb-2.5">
+
+            <div>
+              <h2
+                className={`text-[15px] font-semibold ${
+                  darkMode
+                    ? 'text-slate-200'
+                    : 'text-slate-800'
+                }`}
+              >
+                All testers
+              </h2>
+
+              <p
+                className={`text-[10px] mt-0.5 ${muted}`}
+              >
+                Tested / missed · from 17 Sep
+              </p>
+            </div>
+
+            <span
+              className={`text-[10px] ${muted}`}
+            >
+              {overallTesterData.length} testers
+            </span>
+
+          </div>
+
+          {/* CLEAN TESTER LIST */}
+
+          <div
+            className={`rounded-xl border overflow-hidden ${card}`}
+          >
+
+            {overallTesterData.map(
+              (tester, index) => {
+
+                const testedToday =
+                  hasTestedSomething(
+                    tester.email,
+                    today
+                  );
+
+                return (
+                  <div
+                    key={tester.email}
+                    className={`group flex items-center gap-2.5 px-3 py-2.5 sm:px-3.5 ${
+                      index !==
+                      overallTesterData.length - 1
+                        ? darkMode
+                          ? 'border-b border-slate-800/70'
+                          : 'border-b border-slate-100'
+                        : ''
+                    }`}
+                  >
+
+                    {/* SMALL INDEX */}
+
+                    <span
+                      className={`w-4 text-center text-[9px] font-medium ${muted}`}
+                    >
+                      {index + 1}
+                    </span>
+
+                    {/* AVATAR */}
+
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-semibold shrink-0 ${
+                        testedToday
+                          ? darkMode
+                            ? 'bg-emerald-950 text-emerald-300'
+                            : 'bg-emerald-50 text-emerald-600'
+                          : darkMode
+                          ? 'bg-slate-800 text-slate-400'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {getInitials(
+                        tester.name
+                      )}
+                    </div>
+
+                    {/* NAME */}
+
+                    <div className="flex-1 min-w-0">
+
+                      <div
+                        className={`text-[11px] font-medium truncate ${
+                          darkMode
+                            ? 'text-slate-300'
+                            : 'text-slate-700'
+                        }`}
+                      >
+                        {tester.name}
+                      </div>
+
+                      <div
+                        className={`text-[8px] truncate ${muted}`}
+                      >
+                        {tester.email}
+                      </div>
+
+                    </div>
+
+                    {/* TESTED / MISSED RATIO */}
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+
+                      <span
+                        className="text-[13px] font-semibold tabular-nums text-emerald-500"
+                        title="Tested days"
+                      >
+                        {tester.testedDays}
+                      </span>
+
+                      <span
+                        className={`text-[10px] ${muted}`}
+                      >
+                        /
+                      </span>
+
+                      <span
+                        className="text-[13px] font-semibold tabular-nums text-red-400"
+                        title="Missed days"
+                      >
+                        {tester.missedDays}
+                      </span>
+
+                    </div>
+
+                    {/* TODAY DOT */}
+
+                    <span
+                      title={
+                        testedToday
+                          ? 'Tested today'
+                          : 'Not tested today'
+                      }
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        testedToday
+                          ? 'bg-emerald-500'
+                          : 'bg-red-400'
+                      }`}
+                    />
+
+                    {/* CALENDAR */}
+
+                    <button
+                      onClick={() =>
+                        openCalendar(tester)
+                      }
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
+                        darkMode
+                          ? 'text-slate-500 hover:bg-slate-800 hover:text-blue-400'
+                          : 'text-slate-400 hover:bg-blue-50 hover:text-blue-600'
+                      }`}
+                      title="View history"
+                    >
+                      <CalendarDays size={13} />
+                    </button>
+
+                    {/* REMOVE */}
+
+                    {activeTesters.includes(
+                      tester.email
+                    ) && (
+                      <button
+                        onClick={() =>
+                          removeTesterToday(
+                            tester.email
+                          )
+                        }
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
+                          darkMode
+                            ? 'text-slate-600 hover:bg-red-950 hover:text-red-400'
+                            : 'text-slate-300 hover:bg-red-50 hover:text-red-500'
+                        }`}
+                        title="Remove from today's testing"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+
+                  </div>
+                );
+              }
+            )}
+
+          </div>
+
+        </section>
 
       </div>
 
@@ -1002,38 +1160,40 @@ export default function AdminTestingInfo() {
       ================================================== */}
 
       {activeModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
 
           <div
-            className={`w-full max-w-lg max-h-[85vh] overflow-hidden rounded-3xl ${
+            className={`w-full max-w-md max-h-[85vh] overflow-hidden rounded-2xl ${
               darkMode
-                ? 'bg-slate-900 text-white'
-                : 'bg-white text-slate-900'
+                ? 'bg-[#10151f] text-white'
+                : 'bg-white text-slate-800'
             } shadow-2xl`}
           >
 
-            <div className="p-5 border-b border-slate-200/10 flex items-center justify-between">
+            <div className="px-4 py-3.5 border-b border-slate-200/10 flex items-center justify-between">
 
               <div>
-                <h3 className="text-xl font-extrabold">
-                  Active Testers
+                <h3 className="text-[15px] font-semibold">
+                  Active testers
                 </h3>
 
-                <p className="text-sm text-slate-400">
-                  Select testers used in reports
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Select testers included in reports
                 </p>
               </div>
 
               <button
-                onClick={() => setActiveModal(false)}
-                className="p-2 rounded-lg bg-slate-100/10"
+                onClick={() =>
+                  setActiveModal(false)
+                }
+                className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100/10"
               >
-                <X size={18} />
+                <X size={15} />
               </button>
 
             </div>
 
-            <div className="p-5 overflow-y-auto max-h-[55vh] space-y-2">
+            <div className="p-3 overflow-y-auto max-h-[55vh] space-y-1.5">
 
               {testerList.map((tester) => {
 
@@ -1043,7 +1203,8 @@ export default function AdminTestingInfo() {
                   );
 
                 const isSpecial =
-                  tester.email === SPECIAL_TESTER;
+                  tester.email ===
+                  SPECIAL_TESTER;
 
                 return (
                   <button
@@ -1053,42 +1214,54 @@ export default function AdminTestingInfo() {
                         tester.email
                       )
                     }
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition ${
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition ${
                       checked
-                        ? 'border-blue-500 bg-blue-50 text-blue-900'
+                        ? darkMode
+                          ? 'border-blue-800 bg-blue-950/30'
+                          : 'border-blue-200 bg-blue-50/70'
                         : darkMode
-                        ? 'border-slate-700 bg-slate-800'
+                        ? 'border-slate-800 bg-slate-900/60'
                         : 'border-slate-100 bg-slate-50'
                     }`}
                   >
 
                     <div
-                      className={`w-6 h-6 rounded-md flex items-center justify-center border ${
+                      className={`w-5 h-5 rounded-md flex items-center justify-center border shrink-0 ${
                         checked
                           ? 'bg-blue-600 border-blue-600 text-white'
+                          : darkMode
+                          ? 'border-slate-700'
                           : 'border-slate-300'
                       }`}
                     >
                       {checked && (
-                        <Check size={15} />
+                        <Check size={12} />
                       )}
                     </div>
 
                     <div className="flex-1 min-w-0">
 
-                      <div className="font-bold truncate">
+                      <div
+                        className={`text-[11px] font-medium truncate ${
+                          checked
+                            ? 'text-blue-600'
+                            : darkMode
+                            ? 'text-slate-300'
+                            : 'text-slate-700'
+                        }`}
+                      >
                         {tester.name}
                       </div>
 
-                      <div className="text-xs text-slate-400 truncate">
+                      <div className="text-[9px] text-slate-400 truncate">
                         {tester.email}
                       </div>
 
                     </div>
 
                     {isSpecial && (
-                      <span className="text-[10px] font-extrabold px-2 py-1 rounded-full bg-blue-600 text-white">
-                        ALWAYS ACTIVE
+                      <span className="text-[7px] font-semibold px-1.5 py-1 rounded-md bg-blue-600 text-white">
+                        ALWAYS
                       </span>
                     )}
 
@@ -1098,16 +1271,16 @@ export default function AdminTestingInfo() {
 
             </div>
 
-            <div className="p-5 border-t border-slate-200/10">
+            <div className="p-3 border-t border-slate-200/10">
 
               <button
                 onClick={saveActiveTesters}
                 disabled={savingActive}
-                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold"
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition"
               >
                 {savingActive
                   ? 'Saving...'
-                  : `Save Active Testers (${selectedActive.length})`}
+                  : `Save · ${selectedActive.length} active`}
               </button>
 
             </div>
@@ -1122,24 +1295,24 @@ export default function AdminTestingInfo() {
       ================================================== */}
 
       {notTestedModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
 
           <div
-            className={`w-full max-w-md max-h-[80vh] overflow-hidden rounded-3xl ${
+            className={`w-full max-w-md max-h-[80vh] overflow-hidden rounded-2xl ${
               darkMode
-                ? 'bg-slate-900 text-white'
+                ? 'bg-[#10151f] text-white'
                 : 'bg-white'
             } shadow-2xl`}
           >
 
-            <div className="p-5 flex items-center justify-between border-b border-slate-200/10">
+            <div className="px-4 py-3.5 flex items-center justify-between border-b border-slate-200/10">
 
               <div>
-                <h3 className="text-xl font-extrabold">
-                  Not Tested Today
+                <h3 className="text-[15px] font-semibold">
+                  Not tested
                 </h3>
 
-                <p className="text-sm text-slate-400">
+                <p className="text-[10px] text-slate-400">
                   {formatDate(today)}
                 </p>
               </div>
@@ -1148,37 +1321,57 @@ export default function AdminTestingInfo() {
                 onClick={() =>
                   setNotTestedModal(false)
                 }
-                className="p-2 rounded-lg bg-slate-100/10"
+                className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100/10"
               >
-                <X size={18} />
+                <X size={15} />
               </button>
 
             </div>
 
-            <div className="p-4 overflow-y-auto max-h-[60vh] space-y-2">
+            <div className="p-3 overflow-y-auto max-h-[60vh] space-y-1.5">
 
               {todayNotTested.length === 0 ? (
-                <div className="p-8 text-center text-emerald-500 font-bold">
-                  Everyone completed testing today.
+                <div className="p-7 text-center text-emerald-500 text-[11px] font-medium">
+                  Everyone tested today.
                 </div>
               ) : (
                 todayNotTested.map((tester) => (
                   <div
                     key={tester.email}
-                    className="p-4 rounded-xl bg-red-50 border border-red-100"
+                    className={`flex items-center gap-2.5 p-2.5 rounded-xl ${
+                      darkMode
+                        ? 'bg-red-950/20'
+                        : 'bg-red-50'
+                    }`}
                   >
 
-                    <div className="font-bold text-slate-800">
-                      {tester.name}
+                    <div className="w-8 h-8 rounded-full bg-red-100 text-red-500 flex items-center justify-center text-[9px] font-semibold">
+                      {getInitials(
+                        tester.name
+                      )}
                     </div>
 
-                    <div className="text-xs text-slate-400">
-                      {tester.email}
+                    <div className="flex-1 min-w-0">
+
+                      <div
+                        className={`text-[11px] font-medium truncate ${
+                          darkMode
+                            ? 'text-slate-300'
+                            : 'text-slate-700'
+                        }`}
+                      >
+                        {tester.name}
+                      </div>
+
+                      <div className="text-[9px] text-slate-400 truncate">
+                        {tester.email}
+                      </div>
+
                     </div>
 
-                    <div className="mt-2 text-sm font-bold text-red-600">
-                      {tester.testedCount} apps tested
-                    </div>
+                    <span className="text-[9px] text-red-500 font-medium">
+                      not tested
+                    </span>
 
                   </div>
                 ))
@@ -1196,28 +1389,39 @@ export default function AdminTestingInfo() {
       ================================================== */}
 
       {calendarTester && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
 
           <div
-            className={`w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-3xl ${
+            className={`w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl ${
               darkMode
-                ? 'bg-slate-900 text-white'
+                ? 'bg-[#10151f] text-white'
                 : 'bg-white'
             } shadow-2xl`}
           >
 
-            {/* CALENDAR HEADER */}
-            <div className="p-5 border-b border-slate-200/10 flex items-center justify-between">
+            {/* HEADER */}
 
-              <div>
+            <div className="px-4 py-3.5 border-b border-slate-200/10 flex items-center justify-between">
 
-                <h3 className="text-xl font-extrabold">
-                  {calendarTester.name}
-                </h3>
+              <div className="flex items-center gap-2.5">
 
-                <p className="text-xs text-slate-400">
-                  {calendarTester.email}
-                </p>
+                <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-semibold">
+                  {getInitials(
+                    calendarTester.name
+                  )}
+                </div>
+
+                <div>
+
+                  <h3 className="text-[14px] font-semibold">
+                    {calendarTester.name}
+                  </h3>
+
+                  <p className="text-[9px] text-slate-400">
+                    {calendarTester.email}
+                  </p>
+
+                </div>
 
               </div>
 
@@ -1225,64 +1429,86 @@ export default function AdminTestingInfo() {
                 onClick={() =>
                   setCalendarTester(null)
                 }
-                className="p-2 rounded-lg bg-slate-100/10"
+                className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100/10"
               >
-                <X size={18} />
+                <X size={15} />
               </button>
 
             </div>
 
             {/* SUMMARY */}
-            <div className="grid grid-cols-3 gap-2 p-4">
 
-              <div className="p-3 rounded-xl bg-blue-50 text-center">
-                <div className="text-xs text-blue-500 font-bold">
+            <div className="grid grid-cols-3 gap-2 p-3">
+
+              <div
+                className={`px-2 py-2.5 rounded-xl text-center ${
+                  darkMode
+                    ? 'bg-blue-950/30'
+                    : 'bg-blue-50'
+                }`}
+              >
+
+                <div className="text-[8px] text-blue-500 font-medium">
                   TESTED
                 </div>
 
-                <div className="text-xl font-extrabold text-blue-700">
-                  {calendarTester.dailyData?.filter(
-                    (d) => d.complete
-                  ).length ??
-                    overallTesterData.find(
-                      (x) =>
-                        x.email ===
-                        calendarTester.email
-                    )?.testedDays ??
-                    0}
+                <div className="text-lg font-semibold text-blue-600">
+                  {overallTesterData.find(
+                    (x) =>
+                      x.email ===
+                      calendarTester.email
+                  )?.testedDays ?? 0}
                 </div>
+
               </div>
 
-              <div className="p-3 rounded-xl bg-red-50 text-center">
-                <div className="text-xs text-red-500 font-bold">
+              <div
+                className={`px-2 py-2.5 rounded-xl text-center ${
+                  darkMode
+                    ? 'bg-red-950/30'
+                    : 'bg-red-50'
+                }`}
+              >
+
+                <div className="text-[8px] text-red-500 font-medium">
                   MISSED
                 </div>
 
-                <div className="text-xl font-extrabold text-red-600">
+                <div className="text-lg font-semibold text-red-500">
                   {overallTesterData.find(
                     (x) =>
                       x.email ===
                       calendarTester.email
                   )?.missedDays ?? 0}
                 </div>
+
               </div>
 
-              <div className="p-3 rounded-xl bg-emerald-50 text-center">
-                <div className="text-xs text-emerald-500 font-bold">
-                  FROM
+              <div
+                className={`px-2 py-2.5 rounded-xl text-center ${
+                  darkMode
+                    ? 'bg-emerald-950/30'
+                    : 'bg-emerald-50'
+                }`}
+              >
+
+                <div className="text-[8px] text-emerald-500 font-medium">
+                  SINCE
                 </div>
 
-                <div className="text-sm font-extrabold text-emerald-700 mt-1">
+                <div className="text-[11px] font-semibold text-emerald-600 mt-1.5">
                   17 SEP
                 </div>
+
               </div>
 
             </div>
 
             {/* CALENDAR */}
-            <div className="p-5 overflow-y-auto max-h-[55vh]">
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            <div className="px-3 pb-3 overflow-y-auto max-h-[55vh]">
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
 
                 {calendarDates.map((date) => {
 
@@ -1292,58 +1518,68 @@ export default function AdminTestingInfo() {
                       date
                     );
 
-                  const tested = testedApps.length > 0;
+                  const tested =
+                    testedApps.length > 0;
 
                   return (
                     <div
                       key={date}
-                      className={`p-3 rounded-xl border ${
+                      className={`p-2.5 rounded-xl border ${
                         tested
-                          ? 'bg-emerald-50 border-emerald-200'
-                          : 'bg-red-50 border-red-200'
+                          ? darkMode
+                            ? 'bg-emerald-950/20 border-emerald-900/60'
+                            : 'bg-emerald-50/60 border-emerald-100'
+                          : darkMode
+                          ? 'bg-red-950/20 border-red-900/50'
+                          : 'bg-red-50/60 border-red-100'
                       }`}
                     >
 
                       <div className="flex items-center justify-between">
 
-                        <span className="text-xs font-bold text-slate-500">
+                        <span className="text-[9px] font-medium text-slate-400">
                           {formatDate(date)}
                         </span>
 
                         {tested ? (
                           <CheckCircle2
-                            size={17}
+                            size={13}
                             className="text-emerald-500"
                           />
                         ) : (
                           <X
-                            size={17}
-                            className="text-red-500"
+                            size={13}
+                            className="text-red-400"
                           />
                         )}
 
                       </div>
 
                       <div
-                        className={`mt-2 text-sm font-extrabold ${
+                        className={`mt-1.5 text-[10px] font-medium ${
                           tested
-                            ? 'text-emerald-600'
-                            : 'text-red-600'
+                            ? 'text-emerald-500'
+                            : 'text-red-500'
                         }`}
                       >
                         {tested
-                          ? `${testedApps.length} ${testedApps.length === 1 ? 'app' : 'apps'} tested`
+                          ? `${testedApps.length} ${
+                              testedApps.length ===
+                              1
+                                ? 'app'
+                                : 'apps'
+                            }`
                           : 'Missed'}
                       </div>
 
                       {tested && (
-                        <div className="mt-2 space-y-1">
+                        <div className="mt-1.5 space-y-0.5">
 
                           {testedApps.map(
                             (appId) => (
                               <div
                                 key={appId}
-                                className="text-[10px] text-slate-500 truncate"
+                                className="text-[8px] text-slate-400 truncate"
                               >
                                 ✓{' '}
                                 {appMap[appId]
@@ -1365,15 +1601,16 @@ export default function AdminTestingInfo() {
             </div>
 
             {/* LEGEND */}
-            <div className="p-4 border-t border-slate-200/10 flex flex-wrap gap-4 text-xs font-bold">
+
+            <div className="px-4 py-2.5 border-t border-slate-200/10 flex gap-4 text-[9px]">
 
               <span className="flex items-center gap-1 text-emerald-500">
-                <span className="w-3 h-3 rounded bg-emerald-500" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 Tested
               </span>
 
-              <span className="flex items-center gap-1 text-red-500">
-                <span className="w-3 h-3 rounded bg-red-500" />
+              <span className="flex items-center gap-1 text-red-400">
+                <span className="w-2 h-2 rounded-full bg-red-400" />
                 Missed
               </span>
 
@@ -1384,20 +1621,41 @@ export default function AdminTestingInfo() {
         </div>
       )}
 
-      {/* LOADING */}
-      {loading && (
-        <div className="fixed inset-0 z-[60] bg-white/70 backdrop-blur-sm flex items-center justify-center">
+      {/* ==================================================
+          LOADING
+      ================================================== */}
 
-          <div className="flex items-center gap-3 bg-white px-5 py-4 rounded-2xl shadow-xl text-blue-600 font-bold">
+      {loading && (
+        <div className="fixed inset-0 z-[60] bg-white/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center">
+
+          <div className="flex items-center gap-2.5 bg-white dark:bg-[#10151f] px-4 py-3 rounded-xl shadow-xl text-blue-600">
+
             <RefreshCw
-              size={20}
+              size={16}
               className="animate-spin"
             />
-            Loading testing data...
+
+            <span className="text-[11px] font-medium">
+              Loading...
+            </span>
+
           </div>
 
         </div>
       )}
+
+      {/* HIDE HORIZONTAL SCROLLBAR */}
+
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
 
     </div>
   );
