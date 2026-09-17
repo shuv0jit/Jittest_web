@@ -4,7 +4,7 @@ import AdminTesters from './AdminTesters';
 import AdminWithdrawals from './AdminWithdrawals';
 import AdminHistory from './AdminHistory';
 import AdminNotifications from './AdminNotifications';
-import AdminShares from './AdminShares';
+import AdminShares from './AdminTestingInfo';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
 import { collection, onSnapshot, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
@@ -83,58 +83,105 @@ export default function AdminPanel() {
     }
   }, [activeTab, notifications, unreadCount]);
 
-  useEffect(() => {
-    // Fetch Notifications for Bell Icon
-    const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+ useEffect(() => {
+  // Fetch Notifications for Bell Icon
+  const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'));
+  const unsub = onSnapshot(q, (snap) => {
+    setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  });
 
-    // Fetch Pending Withdrawals for Green Dot
-    const unsubWithdrawals = onSnapshot(collection(db, 'withdrawRequests'), (snap) => {
-      const count = snap.docs.filter(d => {
-        const data = d.data();
-        return data.status === 'pending' || data.status === 'requested' || data.status === 'Pending' || !data.status;
-      }).length;
-      setPendingWithdrawalsCount(count);
-    });
+  // Fetch Pending Withdrawals for Green Dot
+  const unsubWithdrawals = onSnapshot(collection(db, 'withdrawRequests'), (snap) => {
+    const count = snap.docs.filter(d => {
+      const data = d.data();
+      return (
+        data.status === 'pending' ||
+        data.status === 'requested' ||
+        data.status === 'Pending' ||
+        !data.status
+      );
+    }).length;
 
-    // Background Check: Generate Alerts for Apps reaching 15 days
-    const checkAppsForNotifications = async () => {
-      try {
-        const appsSnap = await getDocs(collection(db, 'apps'));
-        const now = Date.now();
-        const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
+    setPendingWithdrawalsCount(count);
+  });
 
-        appsSnap.forEach(async (appDoc) => {
-          const app = appDoc.data();
-          // Only check apps that are ongoing and haven't had a notification created yet
-          if (app.startTime && !app.isPaidByAdmin && !app.productionNotificationCreated && (app.status === 'Ongoing' || !app.status)) {
-            const startTimeMs = app.startTime.toDate().getTime();
-            const daysActive = Math.floor((now - startTimeMs) / (1000 * 60 * 60 * 24));
+  // Background Check: Generate Alerts for Apps reaching 7 and 15 days
+  const checkAppsForNotifications = async () => {
+    try {
+      const appsSnap = await getDocs(collection(db, 'apps'));
+      const now = Date.now();
 
-            if (daysActive >= 15) {
-              await addDoc(collection(db, 'notifications'), {
-                type: 'production_reminder', // New notification type
-                title: 'Production Reminder',
-                message: `App "${app.appName || 'Unknown App'}" has been in testing for 15 days. Consider moving it to production.`,
-                createdAt: serverTimestamp(),
-                owner: app.owner || '',
-                appName: app.appName || 'Unknown App'
-              });
-              await updateDoc(doc(db, 'apps', appDoc.id), { productionNotificationCreated: true });
-            }
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
+
+      appsSnap.forEach(async (appDoc) => {
+        const app = appDoc.data();
+
+        // Only check ongoing apps
+        if (
+          app.startTime &&
+          !app.isPaidByAdmin &&
+          (app.status === 'Ongoing' || !app.status)
+        ) {
+          const startTimeMs = app.startTime.toDate().getTime();
+          const daysActive = Math.floor(
+            (now - startTimeMs) / (1000 * 60 * 60 * 24)
+          );
+
+          // ==============================
+          // 7-DAY ADVANCE PAYMENT REMINDER
+          // ==============================
+          if (
+            daysActive >= 7 &&
+            !app.advanceNotificationCreated
+          ) {
+            await addDoc(collection(db, 'notifications'), {
+              type: 'advance_reminder',
+              title: 'Advance Payment Reminder',
+              message: `App "${app.appName || 'Unknown App'}" has completed 7 days of smooth testing. Please take the advance payment from the owner.`,
+              createdAt: serverTimestamp(),
+              owner: app.owner || '',
+              appName: app.appName || 'Unknown App'
+            });
+
+            await updateDoc(doc(db, 'apps', appDoc.id), {
+              advanceNotificationCreated: true
+            });
           }
-        });
-      } catch (error) {
-      }
-    };
-    checkAppsForNotifications();
-    return () => {
-      unsub();
-      unsubWithdrawals();
-    };
-  }, []);
+
+          // ==============================
+          // 15-DAY PRODUCTION REMINDER
+          // ==============================
+          if (
+            daysActive >= 15 &&
+            !app.productionNotificationCreated
+          ) {
+            await addDoc(collection(db, 'notifications'), {
+              type: 'production_reminder',
+              title: 'Production Reminder',
+              message: `App "${app.appName || 'Unknown App'}" has been in testing for 15 days. Consider moving it to production.`,
+              createdAt: serverTimestamp(),
+              owner: app.owner || '',
+              appName: app.appName || 'Unknown App'
+            });
+
+            await updateDoc(doc(db, 'apps', appDoc.id), {
+              productionNotificationCreated: true
+            });
+          }
+        }
+      });
+    } catch (error) {
+    }
+  };
+
+  checkAppsForNotifications();
+
+  return () => {
+    unsub();
+    unsubWithdrawals();
+  };
+}, []);
 
   // Keyboard shortcuts for Undo/Redo
   useEffect(() => {
@@ -226,7 +273,7 @@ export default function AdminPanel() {
             <History className="w-5 h-5 mr-3" /> System History
           </button>
           <button onClick={() => {setActiveTab('shares'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3.5 min-h-[44px] rounded-xl transition-all duration-300 font-semibold ${activeTab === 'shares' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'}`}>
-            <Calculator className="w-5 h-5 mr-3" /> Calc & Shares
+            <Calculator className="w-5 h-5 mr-3" /> Testing Info
           </button>
         </nav>
         <div className="p-6 shrink-0">

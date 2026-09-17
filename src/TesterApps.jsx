@@ -22,12 +22,38 @@ export default function TesterApps() {
   // Real-time Firestore Listener
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'apps'), (snapshot) => {
-      const appsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const APPS_ALLOWED_FROM_DATE = new Date('2026-09-12T00:00:00');
+
+      const appsData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(app => {
+          // Apps created before September 12, 2026
+          // continue to be visible exactly as before.
+          const appCreatedAt = app.createdAt?.toDate
+            ? app.createdAt.toDate()
+            : app.createdAt
+              ? new Date(app.createdAt)
+              : null;
+
+          if (!appCreatedAt || appCreatedAt < APPS_ALLOWED_FROM_DATE) {
+            return true;
+          }
+
+          // Apps created on/after September 12, 2026
+          // are visible only to testers included in allowedTesterIds.
+          return (
+            currentUser?.uid &&
+            Array.isArray(app.allowedTesterIds) &&
+            app.allowedTesterIds.includes(currentUser.uid)
+          );
+        });
+
       setApps(appsData);
       setLoading(false);
     });
+
     return () => unsubscribe();
-  }, []);
+  }, [currentUser]);
 
   // Categorization Logic
   const categorizedApps = {
@@ -224,31 +250,31 @@ export default function TesterApps() {
       <div className="mb-4 sm:mb-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 sm:gap-3">
           <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide flex-1 min-w-0">
-          {[
-            { id: 'install', label: 'To Install', icon: Download },
-            { id: 'ongoing', label: 'Ongoing', icon: Clock },
-            { id: 'production', label: 'Production', icon: CheckCircle },
-            { id: 'paid', label: 'Paid', icon: CreditCard }
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeSubTab === tab.id;
-            const count = categorizedApps[tab.id]?.length || 0;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveSubTab(tab.id)}
-                className={`relative flex items-center px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${isActive ? 'text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}
-              >
-                {isActive && (
-                  <motion.div layoutId="activeSubTab" className="absolute inset-0 bg-blue-50 rounded-lg border border-blue-100/50" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
-                )}
-                <span className="relative z-10 flex items-center">
-                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 hidden sm:block" /> {tab.label}
-                  <span className={`ml-1.5 sm:ml-2 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] leading-none flex items-center justify-center ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'}`}>{count}</span>
-                </span>
-              </button>
-            );
-          })}
+            {[
+              { id: 'install', label: 'To Install', icon: Download },
+              { id: 'ongoing', label: 'Ongoing', icon: Clock },
+              { id: 'production', label: 'Production', icon: CheckCircle },
+              { id: 'paid', label: 'Paid', icon: CreditCard }
+            ].map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeSubTab === tab.id;
+              const count = categorizedApps[tab.id]?.length || 0;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveSubTab(tab.id)}
+                  className={`relative flex items-center px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${isActive ? 'text-blue-700' : 'text-slate-400 hover:text-slate-700'}`}
+                >
+                  {isActive && (
+                    <motion.div layoutId="activeSubTab" className="absolute inset-0 bg-blue-50 rounded-lg border border-blue-100/50" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                  )}
+                  <span className="relative z-10 flex items-center">
+                    <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 hidden sm:block" /> {tab.label}
+                    <span className={`ml-1.5 sm:ml-2 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] leading-none flex items-center justify-center ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'}`}>{count}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
           
           <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 shrink-0">

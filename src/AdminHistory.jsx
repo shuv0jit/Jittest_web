@@ -104,17 +104,54 @@ export default function AdminHistory() {
     setEditReqStatus(req.status);
   };
 
-  const handleRequestEditSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await updateDoc(doc(db, 'withdrawRequests', editingRequest.id), {
-        amount: Number(editReqAmount),
-        status: editReqStatus
-      });
-      setEditingRequest(null);
-    } catch (err) {
-    }
-  };
+ const handleRequestEditSubmit = async (e) => {
+  e.preventDefault();
+
+  try {
+    const newAmount = Number(editReqAmount);
+    const newStatus = editReqStatus;
+
+    // 1. Update the withdrawal request
+    await updateDoc(doc(db, 'withdrawRequests', editingRequest.id), {
+      amount: newAmount,
+      status: newStatus
+    });
+
+    // 2. Recalculate this tester's TOTAL WITHDRAWN
+    // from all of their withdrawal requests that are marked as paid.
+    const testerRequests = requests.filter(
+      req => req.testerId === editingRequest.testerId
+    );
+
+    let newTotalPaidAmount = 0;
+
+    testerRequests.forEach(req => {
+      const amount =
+        req.id === editingRequest.id
+          ? newAmount
+          : Number(req.amount) || 0;
+
+      const status =
+        req.id === editingRequest.id
+          ? newStatus
+          : req.status;
+
+      if (status === 'paid') {
+        newTotalPaidAmount += amount;
+      }
+    });
+
+    // 3. Save the calculated total directly to the tester's Firebase user document
+    await updateDoc(doc(db, 'users', editingRequest.testerId), {
+      totalPaidAmount: newTotalPaidAmount
+    });
+
+    setEditingRequest(null);
+
+  } catch (err) {
+    console.error('Failed to update withdrawal history:', err);
+  }
+};
 
   const filteredData = groupedData.filter(g => 
     (g.testerName || '').toLowerCase().includes(searchTerm.toLowerCase())
