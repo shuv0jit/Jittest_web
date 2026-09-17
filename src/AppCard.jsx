@@ -35,7 +35,7 @@ const STATUS_CONFIG = {
     text: 'text-blue-700',
     bg: 'bg-blue-50',
     ring: '#3B82F6',
-    pulse: true,
+    pulse: false,
   },
   production: {
     label: 'Production',
