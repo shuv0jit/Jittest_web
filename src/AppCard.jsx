@@ -34,7 +34,7 @@ const STATUS_CONFIG = {
     icon: AlertTriangle,
     text: 'text-blue-700',
     bg: 'bg-blue-50',
-    ring: '#ececec',
+    ring: '#3B82F6',
     pulse: true,
   },
   production: {
@@ -48,7 +48,7 @@ const STATUS_CONFIG = {
   },
   paid: {
     label: 'Paid',
-    action: 'Payment processed',
+    action: 'Paid',
     icon: CheckCircle,
     text: 'text-emerald-700',
     bg: 'bg-emerald-50',
@@ -165,8 +165,7 @@ export default function AppCard({
       return;
     }
 
-    if (testedToday || loading || !app?.id) return;
-
+   if (loading || !app?.id) return;
     const user = auth.currentUser;
 
     if (!user?.email) {
@@ -258,7 +257,7 @@ export default function AppCard({
         boxShadow: '0 16px 32px rgba(47,95,255,0.14)',
       }}
       whileTap={{ scale: 0.98 }}
-      onClick={!isList ? handleTestClick : undefined}
+     onClick={handleTestClick}
       className={`relative cursor-pointer rounded-[22px] border border-blue-100/70 bg-gradient-to-b from-white via-white to-blue-50 shadow-[0_1px_2px_rgba(15,35,90,0.04),0_10px_24px_rgba(15,35,90,0.06)] flex ${
         isList
           ? 'flex-col sm:flex-row sm:items-center sm:gap-5 p-4'
@@ -413,7 +412,7 @@ export default function AppCard({
               opacity: 1,
               y: 0,
             }}
-            className={`font-mono font-semibold text-[13px] ${
+            className={`font-mono font-semibold text-[11px] ${
               testersUnderTarget
                 ? 'text-red-600'
                 : 'text-slate-800'
