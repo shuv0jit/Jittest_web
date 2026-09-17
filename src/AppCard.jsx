@@ -412,7 +412,7 @@ export default function AppCard({
               opacity: 1,
               y: 0,
             }}
-            className={`font-mono font-semibold text-[11px] ${
+            className={`font-mono font-semibold text-[12px] ${
               testersUnderTarget
                 ? 'text-red-600'
                 : 'text-slate-800'
@@ -456,7 +456,7 @@ export default function AppCard({
             section === 'ongoing' && testedToday
               ? 'bg-emerald-500 hover:bg-emerald-600'
               : 'bg-blue-600 hover:bg-blue-700'
-          } text-white font-sora font-bold text-[13px] py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors ${
+          } text-white font-sora font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors ${
             isList
               ? 'w-auto px-8'
               : 'w-full'
