@@ -181,7 +181,7 @@ export default function AppCard({
       '_blank'
     );
 
-    try {
+       try {
       const logRef = doc(db, 'testingLogs', user.email);
 
       await runTransaction(db, async (transaction) => {
@@ -190,24 +190,17 @@ export default function AppCard({
         const data = snap.exists() ? snap.data() : {};
         const tested = data.tested || {};
 
-        // Apps tested today
-        const todayApps = Array.isArray(tested[today])
-          ? tested[today]
-          : [];
-
-        // Already tested → don't count again
-        if (todayApps.includes(app.id)) {
+        // Already tested today → don't overwrite the first time
+        if (tested[today] && tested[today].time) {
           return;
         }
-
-        const updatedTodayApps = [...todayApps, app.id];
 
         transaction.set(
           logRef,
           {
             tested: {
               ...tested,
-              [today]: updatedTodayApps,
+              [today]: { time: new Date().toISOString() },
             },
           },
           { merge: true }
