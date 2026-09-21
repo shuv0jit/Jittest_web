@@ -10,7 +10,7 @@ import {
 import {
   doc,
   getDoc,
-  runTransaction
+ setDoc
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -105,6 +105,8 @@ export default function AppCard({
   const isList = viewMode === 'list';
 
   // Check today's testing record
+   // Check today's testing record
+   // Check today's testing record
   useEffect(() => {
     if (section !== 'ongoing') return;
 
@@ -123,7 +125,7 @@ export default function AppCard({
         }
 
         const data = snap.data();
-        const todayApps = data.tested?.[today] || [];
+        const todayApps = data.tested?.[today]?.apps || [];
 
         setTestedToday(todayApps.includes(app.id));
       } catch (error) {
@@ -133,7 +135,6 @@ export default function AppCard({
 
     return () => unsubscribe?.();
   }, [app?.id, section, today]);
-
   // Automatically reset at Bangladesh midnight
   useEffect(() => {
     const checkDate = () => {
@@ -181,31 +182,38 @@ export default function AppCard({
       '_blank'
     );
 
-       try {
+          try {
       const logRef = doc(db, 'testingLogs', user.email);
+      const snap = await getDoc(logRef);
 
-      await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(logRef);
+      const data = snap.exists() ? snap.data() : {};
+      const tested = data.tested || {};
 
-        const data = snap.exists() ? snap.data() : {};
-        const tested = data.tested || {};
+      const todayEntry = tested[today] || {};
+      const todayApps = Array.isArray(todayEntry.apps) ? todayEntry.apps : [];
 
-        // Already tested today → don't overwrite the first time
-        if (tested[today] && tested[today].time) {
-          return;
-        }
+      if (todayApps.includes(app.id)) {
+        // Already logged — nothing to write
+        setTestedToday(true);
+        if (playWindow) playWindow.focus();
+        return;
+      }
 
-        transaction.set(
-          logRef,
-          {
-            tested: {
-              ...tested,
-              [today]: { time: new Date().toISOString() },
-            },
-          },
-          { merge: true }
-        );
+      // Strip app-id lists from every day except today, so history only
+      // ever keeps { time } — app ids never persist past the day they're tested.
+      const cleaned = {};
+      Object.keys(tested).forEach((dateKey) => {
+        if (dateKey === today) return;
+        const entry = tested[dateKey];
+        cleaned[dateKey] = entry?.time ? { time: entry.time } : entry;
       });
+
+      cleaned[today] = {
+        time: todayEntry.time || new Date().toISOString(),
+        apps: [...todayApps, app.id],
+      };
+
+      await setDoc(logRef, { tested: cleaned });
 
       setTestedToday(true);
 
