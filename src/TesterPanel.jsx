@@ -67,33 +67,7 @@ export default function TesterPanel() {
     }
   }, []);
 
-  const handleEnableNotifications = async () => {
-    try {
-      const supported = await isSupported();
-      if (!supported) return setShowNotifBanner(false); // Silently fail if not supported (e.g., Safari iOS)
-      
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted' && currentUser) {
-        const messaging = getMessaging(app);
-        
-        // Explicitly register the service worker to ensure it controls the push notifications
-        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        
-        // IMPORTANT: Replace with your Firebase Project's VAPID Key from Project Settings > Cloud Messaging -> Web configuration
-        const token = await getToken(messaging, { 
-          vapidKey: 'BDkHiIz4ES1d2C-ErhrSuT5bDpdA-xoDCnIdibJVDUco65ZRTMeobTEepn0Mpa20YxKkdDN2PkVRyu4AVGHky0w',
-          serviceWorkerRegistration: registration
-        });
-        
-        if (token) {
-          await updateDoc(doc(db, 'users', currentUser.uid), { fcmToken: token });
-        }
-      }
-      setShowNotifBanner(false);
-    } catch (error) {
-      setShowNotifBanner(false);
-    }
-  };
+ 
 
   // Handle Foreground Notifications (When the user has the website actively open)
   useEffect(() => {
@@ -352,26 +326,7 @@ export default function TesterPanel() {
         </header>
         
         {/* Notification Permission Banner */}
-        <AnimatePresence>
-          {showNotifBanner && (
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="m-4 sm:mx-6 bg-blue-600 rounded-2xl p-4 sm:p-5 shadow-lg shadow-blue-600/20 text-white flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden z-20 shrink-0">
-              <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-              <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0">
-                   <Bell className="w-5 h-5 text-white" />
-                 </div>
-                 <div>
-                   <h4 className="font-bold text-base">Enable Push Notifications</h4>
-                   <p className="text-blue-100 text-sm font-medium mt-0.5">Get instantly notified when a new app is available to test!</p>
-                 </div>
-              </div>
-              <div className="flex gap-2 w-full sm:w-auto relative z-10">
-                 <button onClick={() => setShowNotifBanner(false)} className="flex-1 px-4 py-2 bg-blue-700 hover:bg-blue-800 rounded-xl text-sm font-bold transition-colors sm:w-auto text-center">Maybe Later</button>
-                 <button onClick={handleEnableNotifications} className="flex-1 px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-xl text-sm font-bold transition-colors shadow-sm sm:w-auto text-center">Allow Notifications</button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        
 
         <main className="flex-1 overflow-auto p-4 sm:p-6">
           {renderContent()}
