@@ -523,6 +523,35 @@ export default function AdminTestingInfo() {
     }
   };
 
+    const updateTesterDay = async (email, dateStr, markTested) => {
+    const confirmMsg = markTested
+      ? `Mark ${dateStr} as tested for ${email}?`
+      : `Delete the testing record for ${dateStr}?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const logRef = doc(db, 'testingLogs', email);
+      const snap = await getDoc(logRef);
+
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+      const tested = { ...(data.tested || {}) };
+      tested[dateStr] = markTested ? { time: new Date().toISOString() } : false;
+
+      await updateDoc(logRef, { tested });
+
+      setLogs((prev) => ({
+        ...prev,
+        [email]: { ...prev[email], tested },
+      }));
+    } catch (error) {
+      console.error(error);
+      alert('Could not update that date.');
+    }
+  };
+
   // --------------------------------------------------
   // DARK MODE
   // --------------------------------------------------
@@ -1237,15 +1266,18 @@ export default function AdminTestingInfo() {
                         const inRange = dateStr >= START_DATE && dateStr <= today;
 
                         if (!inRange) {
-                          return (
-                            <div
-                              key={cIdx}
-                              className={`aspect-square rounded-lg flex items-center justify-center text-[9px] ${
-                                darkMode ? 'text-slate-700' : 'text-slate-300'
+                                                  return (
+                          <button
+                            key={cIdx}
+                            title={dateStr}
+                            onClick={() =>
+                              updateTesterDay(calendarTester.email, dateStr, !tested)
+                            }
+                            className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 border transition hover:opacity-75 ${   darkMode ? 'text-slate-700' : 'text-slate-300'
                               }`}
                             >
                               {cellDate.getDate()}
-                            </div>
+                            </button>
                           );
                         }
 
