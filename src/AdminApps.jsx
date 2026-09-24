@@ -6,6 +6,7 @@ import {
   getDocs,
   doc,
   addDoc,
+  getDoc,
   deleteDoc,
   updateDoc,
   writeBatch,
@@ -99,7 +100,7 @@ export default function AdminApps() {
   const [appPrice, setAppPrice] = useState('1250');
   const [addAllowedTesterIds, setAddAllowedTesterIds] = useState([]);
   const [uploading, setUploading] = useState(false);
-
+const payingRef = useRef(new Set());
   // ------------------------------------------------------------
   // REAL-TIME LISTENERS
   // IMPORTANT:
@@ -446,206 +447,98 @@ export default function AdminApps() {
     }
   };
 
-  const handlePayToggle = async (appId, isPaying) => {
-    try {
-      const app = apps.find((a) => a.id === appId);
-      const testerIds = app?.testerIds || [];
+ const handlePayToggle = async (appId, isPaying) => {
+  if (payingRef.current.has(appId)) return; // blocks double click
+  payingRef.current.add(appId);
 
-      await updateDoc(doc(db, 'apps', appId), {
-        isPaidByAdmin: isPaying,
-        paidAt: isPaying ? serverTimestamp() : null,
-      });
+  try {
+    // Read the app fresh from the database, not from local state
+    const appSnap = await getDoc(doc(db, 'apps', appId));
+    if (!appSnap.exists()) return;
+    const app = appSnap.data();
 
-      if (testerIds.length > 0) {
-        const batch = writeBatch(db);
-        const hourId = Math.floor(
-          Date.now() / 3600000
+    if (!!app.isPaidByAdmin === isPaying) return; // already in that state
+
+    // Pay   -> only ids in this app's testerIds
+    // Unpay -> only ids that were actually paid (old apps fall back to testerIds)
+    const rawIds = isPaying ? app.testerIds : app.paidTesterIds || app.testerIds;
+    const ids = [...new Set((rawIds || []).filter((id) => typeof id === 'string' && id.trim()))];
+
+    // Keep only ids that have a real user doc (never creates new user docs)
+    const checks = await Promise.all(ids.map((id) => getDoc(doc(db, 'users', id))));
+    const testerIds = ids.filter((id, i) => checks[i].exists());
+
+    const batch = writeBatch(db);
+    const hourId = Math.floor(Date.now() / 3600000);
+
+    // App update is in the same batch, so it all succeeds or all fails
+    batch.update(doc(db, 'apps', appId), {
+      isPaidByAdmin: isPaying,
+      paidAt: isPaying ? serverTimestamp() : null,
+      paidTesterIds: isPaying ? testerIds : [],
+    });
+
+    if (isPaying) {
+      testerIds.forEach((testerId) => {
+       batch.update(doc(db, 'users', testerId), {
+  totalAppsPaid: increment(1),
+  withdrawableBalance: increment(50),
+});
+
+        batch.set(
+          doc(db, 'testerNotifications', `pay_${testerId}_${hourId}`),
+          {
+            testerId,
+            type: 'payment',
+            count: increment(1),
+            amount: increment(50),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
         );
+      });
+    } else {
+      paymentNotificationsCacheRef.current = null; // force fresh read
+      const payments = await loadPaymentNotificationsOnce();
 
-        if (isPaying) {
-          // ----------------------------------------------------
-          // PAY
-          // No extra reads required.
-          // ----------------------------------------------------
-          testerIds.forEach((testerId) => {
-            const userRef = doc(db, 'users', testerId);
+      testerIds.forEach((testerId) => {
+       batch.update(doc(db, 'users', testerId), {
+  totalAppsPaid: increment(-1),
+  withdrawableBalance: increment(-50),
+});
 
-            batch.update(userRef, {
-              totalAppsPaid: increment(1),
+        const latest = payments
+          .filter((n) => n.testerId === testerId)
+          .sort((a, b) => {
+            const dA = a.updatedAt?.toDate ? a.updatedAt.toDate().getTime() : 0;
+            const dB = b.updatedAt?.toDate ? b.updatedAt.toDate().getTime() : 0;
+            return dB - dA;
+          })[0];
+
+        if (latest) {
+          if (Number(latest.count) > 1) {
+            batch.update(latest.ref, {
+              count: increment(-1),
+              amount: increment(-50),
             });
-
-            const notifRef = doc(
-              db,
-              'testerNotifications',
-              `pay_${testerId}_${hourId}`
-            );
-
-            batch.set(
-              notifRef,
-              {
-                testerId: testerId,
-                type: 'payment',
-                count: increment(1),
-                amount: increment(50),
-                updatedAt: serverTimestamp(),
-              },
-              { merge: true }
-            );
-          });
-
-          await batch.commit();
-
-          // Keep local cache synchronized.
-          // No Firebase read.
-          if (paymentNotificationsCacheRef.current) {
-            testerIds.forEach((testerId) => {
-              const notifId = `pay_${testerId}_${hourId}`;
-
-              const existingIndex =
-                paymentNotificationsCacheRef.current.findIndex(
-                  (n) => n.id === notifId
-                );
-
-              if (existingIndex >= 0) {
-                const existing =
-                  paymentNotificationsCacheRef.current[
-                    existingIndex
-                  ];
-
-                paymentNotificationsCacheRef.current[
-                  existingIndex
-                ] = {
-                  ...existing,
-                  count: (Number(existing.count) || 0) + 1,
-                  amount:
-                    (Number(existing.amount) || 0) + 50,
-                };
-              } else {
-                paymentNotificationsCacheRef.current.push({
-                  id: notifId,
-                  ref: doc(
-                    db,
-                    'testerNotifications',
-                    notifId
-                  ),
-                  testerId,
-                  type: 'payment',
-                  count: 1,
-                  amount: 50,
-                  updatedAt: null,
-                });
-              }
-            });
+          } else {
+            batch.delete(latest.ref);
           }
-        } else {
-          // ----------------------------------------------------
-          // UNPAY
-          //
-          // BEFORE:
-          // One getDocs query for EVERY tester.
-          //
-          // NOW:
-          // One collection read total, cached and reused.
-          // ----------------------------------------------------
-
-          const payments =
-            await loadPaymentNotificationsOnce();
-
-          testerIds.forEach((testerId) => {
-            const testerPayments = payments
-              .filter(
-                (notification) =>
-                  notification.testerId === testerId
-              )
-              .sort((a, b) => {
-                const dateA =
-                  a.updatedAt?.toDate
-                    ? a.updatedAt
-                        .toDate()
-                        .getTime()
-                    : 0;
-
-                const dateB =
-                  b.updatedAt?.toDate
-                    ? b.updatedAt
-                        .toDate()
-                        .getTime()
-                    : 0;
-
-                return dateB - dateA;
-              });
-
-            if (testerPayments.length > 0) {
-              const latestNotif =
-                testerPayments[0];
-
-              if (
-                Number(latestNotif.count) > 1
-              ) {
-                batch.update(latestNotif.ref, {
-                  count: increment(-1),
-                  amount: increment(-50),
-                });
-
-                // Update cache in memory.
-                latestNotif.count =
-                  Number(latestNotif.count) - 1;
-
-                latestNotif.amount =
-                  Number(latestNotif.amount || 0) - 50;
-              } else {
-                batch.delete(latestNotif.ref);
-
-                // Remove from cache in memory.
-                const cacheIndex =
-                  paymentNotificationsCacheRef.current?.findIndex(
-                    (n) =>
-                      n.id === latestNotif.id
-                  );
-
-                if (
-                  cacheIndex !== undefined &&
-                  cacheIndex >= 0
-                ) {
-                  paymentNotificationsCacheRef.current.splice(
-                    cacheIndex,
-                    1
-                  );
-                }
-              }
-            }
-          });
-
-          await Promise.all(
-            testerIds.map(async (testerId) => {
-              const userRef = doc(
-                db,
-                'users',
-                testerId
-              );
-
-              batch.update(userRef, {
-                totalAppsPaid: increment(-1),
-              });
-            })
-          );
-
-          await batch.commit();
         }
-      }
-
-      alert(
-        `App successfully ${
-          isPaying ? 'Paid' : 'Unpaid'
-        }. Tester balances updated.`
-      );
-    } catch (error) {
-      console.error(
-        'Payment toggle error:',
-        error
-      );
+      });
     }
-  };
+
+    await batch.commit();
+    paymentNotificationsCacheRef.current = null; // clear cache after any change
+
+    alert(`App ${isPaying ? 'Paid' : 'Unpaid'}. ${testerIds.length} testers updated.`);
+  } catch (error) {
+    console.error('Payment toggle error:', error);
+    alert('Payment failed: ' + error.message);
+  } finally {
+    payingRef.current.delete(appId);
+  }
+};
 
   const handleEditClick = (app) => {
     setEditingApp(app);
