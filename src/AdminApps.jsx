@@ -10,7 +10,6 @@ import {
   deleteDoc,
   updateDoc,
   writeBatch,
-  onSnapshot,
   query,
   where,
   increment,
@@ -40,15 +39,27 @@ import {
   CheckSquare,
   UserCheck,
   Check,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const STORAGE_KEY_DEFAULT_TESTERS = 'defaultAllowedTesterIds';
 
+// ------------------------------------------------------------
+// MODULE-LEVEL CACHE
+// Survives component remounts (switching tabs, navigating away
+// and back) within the same browser session, so re-opening this
+// screen costs 0 reads unless the admin hits Refresh or this is
+// the very first load. Cleared only on a full page reload.
+// ------------------------------------------------------------
+let cachedApps = null;
+let cachedTesters = null;
+
 export default function AdminApps() {
-  const [apps, setApps] = useState([]);
-  const [testers, setTesters] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [apps, setApps] = useState(cachedApps || []);
+  const [testers, setTesters] = useState(cachedTesters || []);
+  const [loading, setLoading] = useState(!cachedApps || !cachedTesters);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('Ongoing');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid');
@@ -61,8 +72,6 @@ export default function AdminApps() {
   const [selectedAppForRemoval, setSelectedAppForRemoval] = useState(null);
   const [recentlyRemoved, setRecentlyRemoved] = useState(null);
 
-  // Keep timeout outside render logic so changing it does NOT
-  // recreate the Firebase listeners.
   const undoTimeoutRef = useRef(null);
 
   // Cache tester payment notifications.
@@ -100,76 +109,81 @@ export default function AdminApps() {
   const [appPrice, setAppPrice] = useState('1250');
   const [addAllowedTesterIds, setAddAllowedTesterIds] = useState([]);
   const [uploading, setUploading] = useState(false);
-const payingRef = useRef(new Set());
-  // ------------------------------------------------------------
-  // REAL-TIME LISTENERS
-  // IMPORTANT:
-  // This effect intentionally has [].
-  // Previously [undoTimeoutId] caused Firebase listeners to restart
-  // every time the undo timeout changed.
-  // ------------------------------------------------------------
-  useEffect(() => {
-    setLoading(true);
+  const payingRef = useRef(new Set());
 
-    const unsubApps = onSnapshot(
-      collection(db, 'apps'),
-      (snapshot) => {
-        setApps(
-          snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-        );
-        setLoading(false);
-      },
-      (error) => {
-        setLoading(false);
+  // ------------------------------------------------------------
+  // Helpers that update local state AND the module cache together,
+  // so every write below is reflected instantly without a re-read.
+  // ------------------------------------------------------------
+  const updateApps = (updater) => {
+    setApps((prev) => {
+      const next = updater(prev);
+      cachedApps = next;
+      return next;
+    });
+  };
+
+  const updateTesters = (updater) => {
+    setTesters((prev) => {
+      const next = updater(prev);
+      cachedTesters = next;
+      return next;
+    });
+  };
+
+  // ------------------------------------------------------------
+  // ONE-TIME LOAD (no live listeners)
+  // Uses the module cache when available — 0 reads on remount.
+  // Pass force=true (Refresh button) to bypass the cache.
+  // ------------------------------------------------------------
+  const loadAppsAndTesters = async (force = false) => {
+    if (!force && cachedApps && cachedTesters) {
+      setApps(cachedApps);
+      setTesters(cachedTesters);
+      setLoading(false);
+      return;
+    }
+
+    if (force) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const appsSnap = await getDocs(collection(db, 'apps'));
+      const loadedApps = appsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      cachedApps = loadedApps;
+      setApps(loadedApps);
+
+      const testersQuery = query(collection(db, 'users'), where('role', '==', 'tester'));
+      const testersSnap = await getDocs(testersQuery);
+      const loadedTesters = testersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      cachedTesters = loadedTesters;
+      setTesters(loadedTesters);
+
+      const stored = localStorage.getItem(STORAGE_KEY_DEFAULT_TESTERS);
+
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAddAllowedTesterIds(parsed);
+            return;
+          }
+        } catch (e) {}
       }
-    );
 
-    const q = query(
-      collection(db, 'users'),
-      where('role', '==', 'tester')
-    );
+      setAddAllowedTesterIds(loadedTesters.map((t) => t.id));
+    } catch (error) {
+      console.error('Load error:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-    const unsubTesters = onSnapshot(
-      q,
-      (snapshot) => {
-        const loadedTesters = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        setTesters(loadedTesters);
-
-        // Populate default selection from localStorage
-        // or all active testers.
-        const stored = localStorage.getItem(
-          STORAGE_KEY_DEFAULT_TESTERS
-        );
-
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setAddAllowedTesterIds(parsed);
-              return;
-            }
-          } catch (e) {}
-        }
-
-        setAddAllowedTesterIds(
-          loadedTesters.map((t) => t.id)
-        );
-      },
-      (error) => {}
-    );
+  useEffect(() => {
+    loadAppsAndTesters();
 
     return () => {
-      unsubApps();
-      unsubTesters();
-
       if (undoTimeoutRef.current) {
         clearTimeout(undoTimeoutRef.current);
       }
@@ -181,13 +195,10 @@ const payingRef = useRef(new Set());
   // ------------------------------------------------------------
 
   const loadPaymentNotificationsOnce = async () => {
-    // Already loaded — ZERO additional reads.
     if (paymentNotificationsCacheRef.current) {
       return paymentNotificationsCacheRef.current;
     }
 
-    // If another operation is already loading it,
-    // reuse the same request instead of starting another one.
     if (paymentNotificationsLoadingRef.current) {
       return paymentNotificationsLoadingRef.current;
     }
@@ -231,9 +242,7 @@ const payingRef = useRef(new Set());
 
   const handleToggleTesterSelection = (id) => {
     setSelectedTesterIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((tId) => tId !== id)
-        : [...prev, id]
+      prev.includes(id) ? prev.filter((tId) => tId !== id) : [...prev, id]
     );
   };
 
@@ -279,26 +288,38 @@ const payingRef = useRef(new Set());
   };
 
   const handleRemoveTester = async (appId, testerId) => {
-    if (
-      window.confirm(
-        'Are you sure you want to remove this tester from the app?'
-      )
-    ) {
+    if (window.confirm('Are you sure you want to remove this tester from the app?')) {
       const appRef = doc(db, 'apps', appId);
 
       await updateDoc(appRef, {
         testerIds: arrayRemove(testerId),
       });
 
+      // Optimistic local update — no re-read needed.
+      updateApps((prev) =>
+        prev.map((a) =>
+          a.id === appId
+            ? { ...a, testerIds: (a.testerIds || []).filter((id) => id !== testerId) }
+            : a
+        )
+      );
+
+      if (selectedAppForRemoval?.id === appId) {
+        setSelectedAppForRemoval((prev) =>
+          prev
+            ? { ...prev, testerIds: (prev.testerIds || []).filter((id) => id !== testerId) }
+            : prev
+        );
+      }
+
       if (undoTimeoutRef.current) {
         clearTimeout(undoTimeoutRef.current);
       }
 
-      const removedTester =
-        testers.find((t) => t.id === testerId) || {
-          id: testerId,
-          name: 'Unknown',
-        };
+      const removedTester = testers.find((t) => t.id === testerId) || {
+        id: testerId,
+        name: 'Unknown',
+      };
 
       setRecentlyRemoved({
         appId,
@@ -320,6 +341,23 @@ const payingRef = useRef(new Set());
     await updateDoc(doc(db, 'apps', appId), {
       testerIds: arrayUnion(tester.id),
     });
+
+    // Optimistic local update — no re-read needed.
+    updateApps((prev) =>
+      prev.map((a) =>
+        a.id === appId
+          ? { ...a, testerIds: [...new Set([...(a.testerIds || []), tester.id])] }
+          : a
+      )
+    );
+
+    if (selectedAppForRemoval?.id === appId) {
+      setSelectedAppForRemoval((prev) =>
+        prev
+          ? { ...prev, testerIds: [...new Set([...(prev.testerIds || []), tester.id])] }
+          : prev
+      );
+    }
 
     setRecentlyRemoved(null);
 
@@ -343,9 +381,7 @@ const payingRef = useRef(new Set());
 
       // Default to all current testers if none selected
       const allowed =
-        addAllowedTesterIds.length > 0
-          ? addAllowedTesterIds
-          : testers.map((t) => t.id);
+        addAllowedTesterIds.length > 0 ? addAllowedTesterIds : testers.map((t) => t.id);
 
       const newApp = {
         appName: finalAppName,
@@ -363,18 +399,17 @@ const payingRef = useRef(new Set());
         allowedTesterIds: allowed,
       };
 
-      const docRef = await addDoc(
-        collection(db, 'apps'),
-        newApp
-      );
+      const docRef = await addDoc(collection(db, 'apps'), newApp);
+
+      // Optimistic local update — no re-read needed.
+      // createdAt uses a local timestamp as a stand-in for serverTimestamp()
+      // until the next manual refresh reconciles it with the real value.
+      updateApps((prev) => [...prev, { id: docRef.id, ...newApp, createdAt: new Date() }]);
 
       setIsAddModalOpen(false);
 
       // Remember selection for next app
-      localStorage.setItem(
-        STORAGE_KEY_DEFAULT_TESTERS,
-        JSON.stringify(allowed)
-      );
+      localStorage.setItem(STORAGE_KEY_DEFAULT_TESTERS, JSON.stringify(allowed));
 
       try {
         fetch('/api/notifyNewApp', {
@@ -405,9 +440,7 @@ const payingRef = useRef(new Set());
     const link = e.target.value;
     setAppLink(link);
 
-    const idMatch = link.match(
-      /id=([a-zA-Z0-9._]+)/
-    );
+    const idMatch = link.match(/id=([a-zA-Z0-9._]+)/);
 
     if (idMatch && idMatch[1]) {
       const id = idMatch[1];
@@ -416,11 +449,7 @@ const payingRef = useRef(new Set());
 
       const parts = id.split('.');
 
-      setAppName(
-        parts.length >= 3
-          ? parts[2]
-          : parts[parts.length - 1]
-      );
+      setAppName(parts.length >= 3 ? parts[2] : parts[parts.length - 1]);
     }
   };
 
@@ -443,149 +472,147 @@ const payingRef = useRef(new Set());
     ) {
       try {
         await deleteDoc(doc(db, 'apps', appId));
+
+        // Optimistic local update — no re-read needed.
+        updateApps((prev) => prev.filter((a) => a.id !== appId));
       } catch (error) {}
     }
   };
 
- const handlePayToggle = async (appId, isPaying) => {
-  if (payingRef.current.has(appId)) return; // blocks double click
-  payingRef.current.add(appId);
+  const handlePayToggle = async (appId, isPaying) => {
+    if (payingRef.current.has(appId)) return; // blocks double click
+    payingRef.current.add(appId);
 
-  try {
-    // Read the app fresh from the database, not from local state
-    const appSnap = await getDoc(doc(db, 'apps', appId));
-    if (!appSnap.exists()) return;
-    const app = appSnap.data();
+    try {
+      // Read the app fresh from the database, not from local state
+      const appSnap = await getDoc(doc(db, 'apps', appId));
+      if (!appSnap.exists()) return;
+      const app = appSnap.data();
 
-    if (!!app.isPaidByAdmin === isPaying) return; // already in that state
+      if (!!app.isPaidByAdmin === isPaying) return; // already in that state
 
-    // Pay   -> only ids in this app's testerIds
-    // Unpay -> only ids that were actually paid (old apps fall back to testerIds)
-    const rawIds = isPaying ? app.testerIds : app.paidTesterIds || app.testerIds;
-    const ids = [...new Set((rawIds || []).filter((id) => typeof id === 'string' && id.trim()))];
+      // Pay   -> only ids in this app's testerIds
+      // Unpay -> only ids that were actually paid (old apps fall back to testerIds)
+      const rawIds = isPaying ? app.testerIds : app.paidTesterIds || app.testerIds;
+      const ids = [...new Set((rawIds || []).filter((id) => typeof id === 'string' && id.trim()))];
 
-    // Keep only ids that have a real user doc (never creates new user docs)
-    const checks = await Promise.all(ids.map((id) => getDoc(doc(db, 'users', id))));
-    const testerIds = ids.filter((id, i) => checks[i].exists());
+      // Keep only ids that have a real user doc (never creates new user docs)
+      const checks = await Promise.all(ids.map((id) => getDoc(doc(db, 'users', id))));
+      const testerIds = ids.filter((id, i) => checks[i].exists());
 
-    const batch = writeBatch(db);
-    const hourId = Math.floor(Date.now() / 3600000);
+      const batch = writeBatch(db);
+      const hourId = Math.floor(Date.now() / 3600000);
 
-    // App update is in the same batch, so it all succeeds or all fails
-    batch.update(doc(db, 'apps', appId), {
-      isPaidByAdmin: isPaying,
-      paidAt: isPaying ? serverTimestamp() : null,
-      paidTesterIds: isPaying ? testerIds : [],
-    });
-
-    if (isPaying) {
-      testerIds.forEach((testerId) => {
-       batch.update(doc(db, 'users', testerId), {
-  totalAppsPaid: increment(1),
-  withdrawableBalance: increment(50),
-});
-
-        batch.set(
-          doc(db, 'testerNotifications', `pay_${testerId}_${hourId}`),
-          {
-            testerId,
-            type: 'payment',
-            count: increment(1),
-            amount: increment(50),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
+      // App update is in the same batch, so it all succeeds or all fails
+      batch.update(doc(db, 'apps', appId), {
+        isPaidByAdmin: isPaying,
+        paidAt: isPaying ? serverTimestamp() : null,
+        paidTesterIds: isPaying ? testerIds : [],
       });
-    } else {
-      paymentNotificationsCacheRef.current = null; // force fresh read
-      const payments = await loadPaymentNotificationsOnce();
 
-      testerIds.forEach((testerId) => {
-       batch.update(doc(db, 'users', testerId), {
-  totalAppsPaid: increment(-1),
-  withdrawableBalance: increment(-50),
-});
+      if (isPaying) {
+        testerIds.forEach((testerId) => {
+          batch.update(doc(db, 'users', testerId), {
+            totalAppsPaid: increment(1),
+            withdrawableBalance: increment(50),
+          });
 
-        const latest = payments
-          .filter((n) => n.testerId === testerId)
-          .sort((a, b) => {
-            const dA = a.updatedAt?.toDate ? a.updatedAt.toDate().getTime() : 0;
-            const dB = b.updatedAt?.toDate ? b.updatedAt.toDate().getTime() : 0;
-            return dB - dA;
-          })[0];
+          batch.set(
+            doc(db, 'testerNotifications', `pay_${testerId}_${hourId}`),
+            {
+              testerId,
+              type: 'payment',
+              count: increment(1),
+              amount: increment(50),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+        });
+      } else {
+        paymentNotificationsCacheRef.current = null; // force fresh read
+        const payments = await loadPaymentNotificationsOnce();
 
-        if (latest) {
-          if (Number(latest.count) > 1) {
-            batch.update(latest.ref, {
-              count: increment(-1),
-              amount: increment(-50),
-            });
-          } else {
-            batch.delete(latest.ref);
+        testerIds.forEach((testerId) => {
+          batch.update(doc(db, 'users', testerId), {
+            totalAppsPaid: increment(-1),
+            withdrawableBalance: increment(-50),
+          });
+
+          const latest = payments
+            .filter((n) => n.testerId === testerId)
+            .sort((a, b) => {
+              const dA = a.updatedAt?.toDate ? a.updatedAt.toDate().getTime() : 0;
+              const dB = b.updatedAt?.toDate ? b.updatedAt.toDate().getTime() : 0;
+              return dB - dA;
+            })[0];
+
+          if (latest) {
+            if (Number(latest.count) > 1) {
+              batch.update(latest.ref, {
+                count: increment(-1),
+                amount: increment(-50),
+              });
+            } else {
+              batch.delete(latest.ref);
+            }
           }
-        }
-      });
+        });
+      }
+
+      await batch.commit();
+      paymentNotificationsCacheRef.current = null; // clear cache after any change
+
+      // Optimistic local update — no re-read needed.
+      updateApps((prev) =>
+        prev.map((a) =>
+          a.id === appId
+            ? {
+                ...a,
+                isPaidByAdmin: isPaying,
+                paidAt: isPaying ? new Date() : null,
+                paidTesterIds: isPaying ? testerIds : [],
+              }
+            : a
+        )
+      );
+
+      alert(`App ${isPaying ? 'Paid' : 'Unpaid'}. ${testerIds.length} testers updated.`);
+    } catch (error) {
+      console.error('Payment toggle error:', error);
+      alert('Payment failed: ' + error.message);
+    } finally {
+      payingRef.current.delete(appId);
     }
-
-    await batch.commit();
-    paymentNotificationsCacheRef.current = null; // clear cache after any change
-
-    alert(`App ${isPaying ? 'Paid' : 'Unpaid'}. ${testerIds.length} testers updated.`);
-  } catch (error) {
-    console.error('Payment toggle error:', error);
-    alert('Payment failed: ' + error.message);
-  } finally {
-    payingRef.current.delete(appId);
-  }
-};
+  };
 
   const handleEditClick = (app) => {
     setEditingApp(app);
 
-    setEditPackageName(
-      app.packageName || ''
-    );
+    setEditPackageName(app.packageName || '');
 
-    setEditAppName(
-      app.appName || ''
-    );
+    setEditAppName(app.appName || '');
 
-    setEditInstalledCount(
-      app.testerIds?.length || 0
-    );
+    setEditInstalledCount(app.testerIds?.length || 0);
 
-    setEditDayCount(
-      app.daysActive || 0
-    );
+    setEditDayCount(app.daysActive || 0);
 
     // Load existing allowed testers or default to all
-    const existingAllowed =
-      Array.isArray(app.allowedTesterIds)
-        ? app.allowedTesterIds
-        : testers.map((t) => t.id);
+    const existingAllowed = Array.isArray(app.allowedTesterIds)
+      ? app.allowedTesterIds
+      : testers.map((t) => t.id);
 
-    setEditAllowedTesterIds(
-      existingAllowed
-    );
+    setEditAllowedTesterIds(existingAllowed);
 
     if (app.startTime) {
-      const start = app.startTime.toDate
-        ? app.startTime.toDate()
-        : new Date(app.startTime);
+      const start = app.startTime.toDate ? app.startTime.toDate() : new Date(app.startTime);
 
       if (!isNaN(start)) {
         const year = start.getFullYear();
-        const month = String(
-          start.getMonth() + 1
-        ).padStart(2, '0');
-        const day = String(
-          start.getDate()
-        ).padStart(2, '0');
+        const month = String(start.getMonth() + 1).padStart(2, '0');
+        const day = String(start.getDate()).padStart(2, '0');
 
-        setEditStartTime(
-          `${year}-${month}-${day}`
-        );
+        setEditStartTime(`${year}-${month}-${day}`);
       } else {
         setEditStartTime('');
       }
@@ -593,13 +620,9 @@ const payingRef = useRef(new Set());
       setEditStartTime('');
     }
 
-    setEditAppOwner(
-      app.owner || 'dont know yet'
-    );
+    setEditAppOwner(app.owner || 'dont know yet');
 
-    setEditAppPrice(
-      app.price || 1250
-    );
+    setEditAppPrice(app.price || 1250);
 
     setIsEditModalOpen(true);
   };
@@ -608,70 +631,62 @@ const payingRef = useRef(new Set());
     e.preventDefault();
 
     try {
-      let finalInstalledCount =
-        Number(editInstalledCount);
+      let finalInstalledCount = Number(editInstalledCount);
 
-      if (
-        testers.length > 0 &&
-        finalInstalledCount > testers.length
-      ) {
+      if (testers.length > 0 && finalInstalledCount > testers.length) {
         alert(
           `Verification Failed: You cannot set installed count to ${finalInstalledCount} because there are currently only ${testers.length} registered testers. Adjusting to the maximum available limit.`
         );
 
-        finalInstalledCount =
-          testers.length;
+        finalInstalledCount = testers.length;
       }
 
       const updatedData = {
-        packageName:
-          editPackageName.trim(),
-
-        appName:
-          editAppName.trim(),
-
-        owner:
-          editAppOwner.trim(),
-
-        price:
-          Number(editAppPrice),
-
-        allowedTesterIds:
-          editAllowedTesterIds,
+        packageName: editPackageName.trim(),
+        appName: editAppName.trim(),
+        owner: editAppOwner.trim(),
+        price: Number(editAppPrice),
+        allowedTesterIds: editAllowedTesterIds,
       };
 
-      if (
-        Number(editInstalledCount) >= 12 &&
-        Number(editDayCount) === 0 &&
-        !editStartTime
-      ) {
-        updatedData.startTime =
-          serverTimestamp();
+      let optimisticStartTime = editingApp.startTime;
+      let optimisticStatus = editingApp.status;
+      let optimisticDayCount = editingApp.dayCount;
 
-        updatedData.status =
-          'Ongoing';
-
+      if (Number(editInstalledCount) >= 12 && Number(editDayCount) === 0 && !editStartTime) {
+        updatedData.startTime = serverTimestamp();
+        updatedData.status = 'Ongoing';
         updatedData.dayCount = 0;
+
+        optimisticStartTime = new Date();
+        optimisticStatus = 'Ongoing';
+        optimisticDayCount = 0;
       } else if (editStartTime) {
-        const startMidnight =
-          new Date(editStartTime);
+        const startMidnight = new Date(editStartTime);
+        startMidnight.setHours(0, 0, 0, 0);
 
-        startMidnight.setHours(
-          0,
-          0,
-          0,
-          0
-        );
-
-        updatedData.startTime =
-          startMidnight;
+        updatedData.startTime = startMidnight;
+        optimisticStartTime = startMidnight;
       } else {
         updatedData.startTime = null;
+        optimisticStartTime = null;
       }
 
-      await updateDoc(
-        doc(db, 'apps', editingApp.id),
-        updatedData
+      await updateDoc(doc(db, 'apps', editingApp.id), updatedData);
+
+      // Optimistic local update — no re-read needed.
+      updateApps((prev) =>
+        prev.map((a) =>
+          a.id === editingApp.id
+            ? {
+                ...a,
+                ...updatedData,
+                startTime: optimisticStartTime,
+                status: optimisticStatus,
+                dayCount: optimisticDayCount,
+              }
+            : a
+        )
       );
 
       setIsEditModalOpen(false);
@@ -681,24 +696,18 @@ const payingRef = useRef(new Set());
     }
   };
 
-  const handleStatusChange = async (
-    appId,
-    newStatus
-  ) => {
+  const handleStatusChange = async (appId, newStatus) => {
     try {
-      const appRef = doc(
-        db,
-        'apps',
-        appId
-      );
+      const appRef = doc(db, 'apps', appId);
 
       await updateDoc(appRef, {
         status: newStatus,
       });
+
+      // Optimistic local update — no re-read needed.
+      updateApps((prev) => prev.map((a) => (a.id === appId ? { ...a, status: newStatus } : a)));
     } catch (error) {
-      alert(
-        `Failed to update app status: ${error.message}`
-      );
+      alert(`Failed to update app status: ${error.message}`);
     }
   };
 
@@ -709,78 +718,35 @@ const payingRef = useRef(new Set());
 
   const processedApps = apps
     .map((app) => {
-      const pNameStr =
-        typeof app.packageName === 'string'
-          ? app.packageName.trim()
-          : '';
+      const pNameStr = typeof app.packageName === 'string' ? app.packageName.trim() : '';
 
-      const aNameStr =
-        typeof app.appName === 'string'
-          ? app.appName.trim()
-          : '';
+      const aNameStr = typeof app.appName === 'string' ? app.appName.trim() : '';
 
       const finalAppName =
-        aNameStr ||
-        (pNameStr
-          ? pNameStr.split('.').pop()
-          : 'Unknown Application');
+        aNameStr || (pNameStr ? pNameStr.split('.').pop() : 'Unknown Application');
 
-      let daysActive =
-        app.dayCount || 0;
+      let daysActive = app.dayCount || 0;
 
       if (app.startTime) {
-        const start =
-          app.startTime.toDate
-            ? app.startTime.toDate()
-            : new Date(app.startTime);
+        const start = app.startTime.toDate ? app.startTime.toDate() : new Date(app.startTime);
 
         if (!isNaN(start)) {
-          const startMidnight =
-            new Date(start);
+          const startMidnight = new Date(start);
+          startMidnight.setHours(0, 0, 0, 0);
 
-          startMidnight.setHours(
-            0,
-            0,
-            0,
-            0
-          );
-
-          const nowMidnight =
-            new Date();
-
-          nowMidnight.setHours(
-            0,
-            0,
-            0,
-            0
-          );
+          const nowMidnight = new Date();
+          nowMidnight.setHours(0, 0, 0, 0);
 
           daysActive = Math.floor(
-            Math.max(
-              0,
-              nowMidnight.getTime() -
-                startMidnight.getTime()
-            ) /
-              (1000 *
-                60 *
-                60 *
-                24)
+            Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) / (1000 * 60 * 60 * 24)
           );
         }
       }
 
-      let displayTesterCount =
-        Array.isArray(app.testerIds)
-          ? app.testerIds.length
-          : 0;
+      let displayTesterCount = Array.isArray(app.testerIds) ? app.testerIds.length : 0;
 
-      if (
-        testers.length > 0 &&
-        displayTesterCount >
-          testers.length
-      ) {
-        displayTesterCount =
-          testers.length;
+      if (testers.length > 0 && displayTesterCount > testers.length) {
+        displayTesterCount = testers.length;
       }
 
       return {
@@ -792,106 +758,53 @@ const payingRef = useRef(new Set());
         displayTesterCount,
       };
     })
-    .filter(
-      (app) =>
-        app.pNameStr ||
-        app.aNameStr
-    );
+    .filter((app) => app.pNameStr || app.aNameStr);
 
-  const filterApps = (
-    statusFilter
-  ) => {
-    return processedApps.filter(
-      (app) => {
-        if (statusFilter === 'Paid') {
-          return app.isPaidByAdmin;
-        }
-
-        const isToInstall =
-          !app.isPaidByAdmin &&
-          app.displayTesterCount < 12;
-
-        if (
-          statusFilter === 'To Install'
-        ) {
-          return isToInstall;
-        }
-
-        const isProduction =
-          app.status ===
-          'production_access';
-
-        if (
-          statusFilter === 'Production'
-        ) {
-          return (
-            !app.isPaidByAdmin &&
-            !isToInstall &&
-            isProduction
-          );
-        }
-
-        if (
-          statusFilter === 'Ongoing'
-        ) {
-          return (
-            !app.isPaidByAdmin &&
-            !isToInstall &&
-            !isProduction
-          );
-        }
-
-        return false;
+  const filterApps = (statusFilter) => {
+    return processedApps.filter((app) => {
+      if (statusFilter === 'Paid') {
+        return app.isPaidByAdmin;
       }
-    );
+
+      const isToInstall = !app.isPaidByAdmin && app.displayTesterCount < 12;
+
+      if (statusFilter === 'To Install') {
+        return isToInstall;
+      }
+
+      const isProduction = app.status === 'production_access';
+
+      if (statusFilter === 'Production') {
+        return !app.isPaidByAdmin && !isToInstall && isProduction;
+      }
+
+      if (statusFilter === 'Ongoing') {
+        return !app.isPaidByAdmin && !isToInstall && !isProduction;
+      }
+
+      return false;
+    });
   };
 
-  const currentApps =
-    filterApps(activeTab).filter(
-      (app) => {
-        if (!searchQuery) return true;
+  const currentApps = filterApps(activeTab).filter((app) => {
+    if (!searchQuery) return true;
 
-        const lowerQ =
-          searchQuery.toLowerCase();
+    const lowerQ = searchQuery.toLowerCase();
 
-        return (
-          app.finalAppName
-            ?.toLowerCase()
-            .includes(lowerQ) ||
-          app.pNameStr
-            ?.toLowerCase()
-            .includes(lowerQ) ||
-          app.owner
-            ?.toLowerCase()
-            .includes(lowerQ)
-        );
-      }
+    return (
+      app.finalAppName?.toLowerCase().includes(lowerQ) ||
+      app.pNameStr?.toLowerCase().includes(lowerQ) ||
+      app.owner?.toLowerCase().includes(lowerQ)
     );
+  });
 
   currentApps.sort((a, b) => {
     if (activeTab === 'Ongoing') {
-      return (
-        b.daysActive -
-        a.daysActive
-      );
-    } else if (
-      activeTab === 'Production'
-    ) {
-      return (
-        (b.startTime?.toDate?.() ||
-          0) -
-        (a.startTime?.toDate?.() ||
-          0)
-      );
-    } else if (
-      activeTab === 'Paid'
-    ) {
-      return (
-        (b.paidAt?.toDate?.() ||
-          0) -
-        (a.paidAt?.toDate?.() ||
-          0)
-      );
+      return b.daysActive - a.daysActive;
+    } else if (activeTab === 'Production') {
+      return (b.startTime?.toDate?.() || 0) - (a.startTime?.toDate?.() || 0);
+    } else if (activeTab === 'Paid') {
+      return (b.paidAt?.toDate?.() || 0) - (a.paidAt?.toDate?.() || 0);
     }
 
     return 0;
@@ -926,79 +839,41 @@ const payingRef = useRef(new Set());
     setTouchEndX(null);
     setTouchEndY(null);
 
-    setTouchStartX(
-      e.targetTouches[0].clientX
-    );
+    setTouchStartX(e.targetTouches[0].clientX);
 
-    setTouchStartY(
-      e.targetTouches[0].clientY
-    );
+    setTouchStartY(e.targetTouches[0].clientY);
   };
 
   const handleTouchMove = (e) => {
-    setTouchEndX(
-      e.targetTouches[0].clientX
-    );
+    setTouchEndX(e.targetTouches[0].clientX);
 
-    setTouchEndY(
-      e.targetTouches[0].clientY
-    );
+    setTouchEndY(e.targetTouches[0].clientY);
   };
 
   const handleTouchEnd = () => {
-    if (
-      !touchStartX ||
-      !touchEndX ||
-      !touchStartY ||
-      !touchEndY
-    ) {
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) {
       return;
     }
 
-    const distanceX =
-      touchStartX - touchEndX;
+    const distanceX = touchStartX - touchEndX;
 
-    const distanceY =
-      touchStartY - touchEndY;
+    const distanceY = touchStartY - touchEndY;
 
-    if (
-      Math.abs(distanceX) >
-      Math.abs(distanceY)
-    ) {
-      if (
-        distanceX < -50 &&
-        touchStartX < 50
-      ) {
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      if (distanceX < -50 && touchStartX < 50) {
         return;
       }
 
-      const tabs = [
-        'To Install',
-        'Ongoing',
-        'Production',
-        'Paid',
-      ];
+      const tabs = ['To Install', 'Ongoing', 'Production', 'Paid'];
 
-      const currentIndex =
-        tabs.indexOf(activeTab);
+      const currentIndex = tabs.indexOf(activeTab);
 
-      if (
-        distanceX > 50 &&
-        currentIndex <
-          tabs.length - 1
-      ) {
-        setActiveTab(
-          tabs[currentIndex + 1]
-        );
+      if (distanceX > 50 && currentIndex < tabs.length - 1) {
+        setActiveTab(tabs[currentIndex + 1]);
       }
 
-      if (
-        distanceX < -50 &&
-        currentIndex > 0
-      ) {
-        setActiveTab(
-          tabs[currentIndex - 1]
-        );
+      if (distanceX < -50 && currentIndex > 0) {
+        setActiveTab(tabs[currentIndex - 1]);
       }
     }
   };
@@ -1036,24 +911,18 @@ const payingRef = useRef(new Set());
                 icon: CreditCard,
               },
             ].map((tab) => {
-              const isActive =
-                activeTab === tab.id;
+              const isActive = activeTab === tab.id;
 
-              const count =
-                filterApps(tab.id).length;
+              const count = filterApps(tab.id).length;
 
               const Icon = tab.icon;
 
               return (
                 <button
                   key={tab.id}
-                  onClick={() =>
-                    setActiveTab(tab.id)
-                  }
+                  onClick={() => setActiveTab(tab.id)}
                   className={`relative flex items-center px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
-                    isActive
-                      ? 'text-blue-700'
-                      : 'text-slate-500 hover:text-slate-700'
+                    isActive ? 'text-blue-700' : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
                   {isActive && (
@@ -1075,9 +944,7 @@ const payingRef = useRef(new Set());
 
                     <span
                       className={`ml-1.5 sm:ml-2 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] leading-none flex items-center justify-center ${
-                        isActive
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-slate-100 text-slate-500'
+                        isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
                       }`}
                     >
                       {count}
@@ -1091,20 +958,25 @@ const payingRef = useRef(new Set());
           <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
             <div className="flex items-center gap-2 h-9 sm:h-10 justify-between sm:justify-start">
               <button
-                onClick={() =>
-                  setIsAddModalOpen(true)
-                }
+                onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-blue-600 text-white rounded-xl shadow-sm hover:bg-blue-700 hover:shadow-md hover:scale-105 active:scale-95 transition-all shrink-0"
                 title="Add App"
               >
                 <Plus className="w-5 h-5" />
               </button>
 
+              <button
+                onClick={() => loadAppsAndTesters(true)}
+                disabled={refreshing}
+                className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-white border border-slate-200 text-slate-500 rounded-xl shadow-sm hover:text-blue-600 hover:border-blue-200 transition-all shrink-0 disabled:opacity-50"
+                title="Refresh from database"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+
               <div className="bg-white border border-slate-100 rounded-xl flex p-0.5 h-full shrink-0 shadow-sm">
                 <button
-                  onClick={() =>
-                    setViewMode('grid')
-                  }
+                  onClick={() => setViewMode('grid')}
                   className={`p-1.5 sm:p-2 rounded-lg transition-colors flex items-center justify-center ${
                     viewMode === 'grid'
                       ? 'bg-blue-50 text-blue-600'
@@ -1115,9 +987,7 @@ const payingRef = useRef(new Set());
                 </button>
 
                 <button
-                  onClick={() =>
-                    setViewMode('list')
-                  }
+                  onClick={() => setViewMode('list')}
                   className={`p-1.5 sm:p-2 rounded-lg transition-colors flex items-center justify-center ${
                     viewMode === 'list'
                       ? 'bg-blue-50 text-blue-600'
@@ -1136,11 +1006,7 @@ const payingRef = useRef(new Set());
                 type="text"
                 placeholder="Search apps..."
                 value={searchQuery}
-                onChange={(e) =>
-                  setSearchQuery(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-3 h-full border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white shadow-sm text-xs sm:text-sm font-medium transition-all"
               />
             </div>
@@ -1160,9 +1026,7 @@ const payingRef = useRef(new Set());
               <LayoutGrid className="w-10 h-10 text-slate-300" />
             </div>
 
-            <h3 className="text-xl font-black text-slate-700">
-              No Apps Found
-            </h3>
+            <h3 className="text-xl font-black text-slate-700">No Apps Found</h3>
 
             <p className="text-slate-400 font-medium mt-2">
               There are no applications in this section.
@@ -1199,9 +1063,7 @@ const payingRef = useRef(new Set());
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDeleteApp(
-                      app.id
-                    );
+                    handleDeleteApp(app.id);
                   }}
                   className="absolute top-2 right-2 sm:top-3 sm:right-3 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors z-10"
                   title="Delete App"
@@ -1211,9 +1073,7 @@ const payingRef = useRef(new Set());
 
                 <div
                   className={`flex flex-1 min-w-0 w-full ${
-                    viewMode === 'list'
-                      ? 'items-center text-left pr-8'
-                      : 'flex-col items-center pt-2'
+                    viewMode === 'list' ? 'items-center text-left pr-8' : 'flex-col items-center pt-2'
                   }`}
                 >
                   {app.imageUrl ? (
@@ -1221,17 +1081,13 @@ const payingRef = useRef(new Set());
                       src={app.imageUrl}
                       alt={app.finalAppName}
                       className={`rounded-xl object-cover shadow-sm border border-gray-100 shrink-0 ${
-                        viewMode === 'list'
-                          ? 'w-12 h-12 mr-4'
-                          : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'
+                        viewMode === 'list' ? 'w-12 h-12 mr-4' : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'
                       }`}
                     />
                   ) : (
                     <div
                       className={`rounded-xl bg-blue-50 flex items-center justify-center text-blue-300 border border-blue-100 shrink-0 ${
-                        viewMode === 'list'
-                          ? 'w-12 h-12 mr-4'
-                          : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'
+                        viewMode === 'list' ? 'w-12 h-12 mr-4' : 'w-12 h-12 sm:w-14 sm:h-14 mb-2 sm:mb-3'
                       }`}
                     >
                       <ImageIcon className="w-6 h-6" />
@@ -1241,9 +1097,7 @@ const payingRef = useRef(new Set());
                   <div className="flex-1 overflow-hidden w-full">
                     <h3
                       className="font-bold text-gray-900 truncate text-sm sm:text-base"
-                      title={
-                        app.finalAppName
-                      }
+                      title={app.finalAppName}
                     >
                       {app.finalAppName}
                     </h3>
@@ -1264,6 +1118,15 @@ const payingRef = useRef(new Set());
                           {app.owner}
                         </p>
                       )}
+
+                      {(app.price || app.price === 0) && (
+                        <p
+                          className="text-[9px] sm:text-[10px] text-emerald-600 truncate font-bold"
+                          title={`Price: ${app.price} TK`}
+                        >
+                          ৳{app.price}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1271,9 +1134,7 @@ const payingRef = useRef(new Set());
                 {/* Stats */}
                 <div
                   className={`grid grid-cols-2 gap-2 w-full ${
-                    viewMode === 'grid'
-                      ? 'my-3'
-                      : 'mt-3 sm:mt-0 sm:w-40 shrink-0'
+                    viewMode === 'grid' ? 'my-3' : 'mt-3 sm:mt-0 sm:w-40 shrink-0'
                   }`}
                 >
                   <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100/50 text-center">
@@ -1300,30 +1161,20 @@ const payingRef = useRef(new Set());
                 {/* Actions */}
                 <div
                   className={`flex gap-2 sm:gap-3 ${
-                    viewMode === 'list'
-                      ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0'
-                      : 'w-full mt-auto pt-2'
+                    viewMode === 'list' ? 'sm:w-auto sm:ml-auto mt-3 sm:mt-0' : 'w-full mt-auto pt-2'
                   }`}
                 >
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setMissingTestersApp(
-                        app
-                      );
+                      setMissingTestersApp(app);
                     }}
                     className="flex-1 sm:flex-none border border-amber-200 text-amber-600 bg-amber-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-amber-100 flex justify-center items-center transition-colors"
                     title="View Missing Testers"
                   >
                     <Users className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" />
 
-                    <span
-                      className={
-                        viewMode === 'grid'
-                          ? 'hidden sm:inline'
-                          : 'hidden md:inline'
-                      }
-                    >
+                    <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>
                       Missing
                     </span>
                   </button>
@@ -1331,78 +1182,48 @@ const payingRef = useRef(new Set());
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleEditClick(
-                        app
-                      );
+                      handleEditClick(app);
                     }}
                     className="flex-1 sm:flex-none border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors"
                   >
                     <Edit className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" />
 
-                    <span
-                      className={
-                        viewMode === 'grid'
-                          ? 'hidden sm:inline'
-                          : 'hidden md:inline'
-                      }
-                    >
+                    <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>
                       Edit
                     </span>
                   </button>
 
-                  {activeTab ===
-                    'Ongoing' && (
+                  {activeTab === 'Ongoing' && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
 
-                        handleStatusChange(
-                          app.id,
-                          'production_access'
-                        );
+                        handleStatusChange(app.id, 'production_access');
                       }}
                       className="flex-1 sm:flex-none border border-green-200 text-green-600 bg-green-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-green-100 flex justify-center items-center transition-colors"
                       title="Move to Production"
                     >
                       <CheckSquare className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" />
 
-                      <span
-                        className={
-                          viewMode ===
-                          'grid'
-                            ? 'hidden sm:inline'
-                            : 'hidden md:inline'
-                        }
-                      >
+                      <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>
                         Production
                       </span>
                     </button>
                   )}
 
-                  {activeTab ===
-                    'Production' && (
+                  {activeTab === 'Production' && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
 
-                        handleStatusChange(
-                          app.id,
-                          'Ongoing'
-                        );
+                        handleStatusChange(app.id, 'Ongoing');
                       }}
                       className="flex-1 sm:flex-none border border-slate-200 text-slate-600 bg-slate-50 py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-slate-100 flex justify-center items-center transition-colors"
                       title="Move back to Ongoing"
                     >
                       <Undo2 className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" />
 
-                      <span
-                        className={
-                          viewMode ===
-                          'grid'
-                            ? 'hidden sm:inline'
-                            : 'hidden md:inline'
-                        }
-                      >
+                      <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>
                         Undo
                       </span>
                     </button>
@@ -1413,23 +1234,13 @@ const payingRef = useRef(new Set());
                       onClick={(e) => {
                         e.stopPropagation();
 
-                        handlePayToggle(
-                          app.id,
-                          true
-                        );
+                        handlePayToggle(app.id, true);
                       }}
                       className="flex-1 sm:flex-none bg-emerald-600 text-white py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-emerald-700 flex justify-center items-center transition-colors shadow-sm"
                     >
                       <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" />
 
-                      <span
-                        className={
-                          viewMode ===
-                          'grid'
-                            ? 'hidden sm:inline'
-                            : 'hidden md:inline'
-                        }
-                      >
+                      <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>
                         Pay
                       </span>
                     </button>
@@ -1438,23 +1249,13 @@ const payingRef = useRef(new Set());
                       onClick={(e) => {
                         e.stopPropagation();
 
-                        handlePayToggle(
-                          app.id,
-                          false
-                        );
+                        handlePayToggle(app.id, false);
                       }}
                       className="flex-1 sm:flex-none bg-red-500 text-white py-2 sm:py-2.5 min-h-[44px] px-2 rounded-xl text-[11px] sm:text-xs font-semibold hover:bg-red-600 flex justify-center items-center transition-colors shadow-sm"
                     >
                       <Undo className="w-3 h-3 sm:w-4 sm:h-4 md:mr-1" />
 
-                      <span
-                        className={
-                          viewMode ===
-                          'grid'
-                            ? 'hidden sm:inline'
-                            : 'hidden md:inline'
-                        }
-                      >
+                      <span className={viewMode === 'grid' ? 'hidden sm:inline' : 'hidden md:inline'}>
                         Unpay
                       </span>
                     </button>
@@ -1471,26 +1272,17 @@ const payingRef = useRef(new Set());
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
-              <h3 className="text-xl font-bold text-gray-900">
-                Add New App
-              </h3>
+              <h3 className="text-xl font-bold text-gray-900">Add New App</h3>
 
               <button
-                onClick={() =>
-                  setIsAddModalOpen(
-                    false
-                  )
-                }
+                onClick={() => setIsAddModalOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form
-              onSubmit={handleAddApp}
-              className="space-y-4"
-            >
+            <form onSubmit={handleAddApp} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Play Store Link (Auto-fill)
@@ -1499,9 +1291,7 @@ const payingRef = useRef(new Set());
                 <input
                   type="text"
                   value={appLink}
-                  onChange={
-                    handleLinkChange
-                  }
+                  onChange={handleLinkChange}
                   placeholder="https://play.google.com/store/apps/details?id=com.example.app"
                   className="w-full px-3 py-2 border border-blue-200 bg-blue-50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
@@ -1518,19 +1308,13 @@ const payingRef = useRef(new Set());
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  App Name *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">App Name *</label>
 
                 <input
                   type="text"
                   required
                   value={appName}
-                  onChange={(e) =>
-                    setAppName(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setAppName(e.target.value)}
                   placeholder="e.g. Hisab"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
@@ -1545,9 +1329,7 @@ const payingRef = useRef(new Set());
                   type="text"
                   required
                   value={packageName}
-                  onChange={
-                    handlePackageNameChange
-                  }
+                  onChange={handlePackageNameChange}
                   placeholder="com.example.app"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
@@ -1561,29 +1343,19 @@ const payingRef = useRef(new Set());
                 <input
                   type="text"
                   value={appOwner}
-                  onChange={(e) =>
-                    setAppOwner(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setAppOwner(e.target.value)}
                   placeholder="e.g. Shuvojit or 017..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Price (TK)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price (TK)</label>
 
                 <input
                   type="number"
                   value={appPrice}
-                  onChange={(e) =>
-                    setAppPrice(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setAppPrice(e.target.value)}
                   placeholder="1250"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
@@ -1597,47 +1369,30 @@ const payingRef = useRef(new Set());
 
                 <button
                   type="button"
-                  onClick={() =>
-                    openTesterSelection(
-                      'add'
-                    )
-                  }
+                  onClick={() => openTesterSelection('add')}
                   className="w-full flex items-center justify-between px-3 py-2.5 border border-blue-200 bg-blue-50/60 rounded-xl hover:bg-blue-100/70 transition-colors text-left"
                 >
                   <div className="flex items-center gap-2">
                     <UserCheck className="w-4 h-4 text-blue-600" />
 
                     <span className="text-xs font-bold text-blue-900">
-                      Select Testers (
-                      {
-                        addAllowedTesterIds.length
-                      }
-                      /
-                      {
-                        testers.length
-                      }
-                      )
+                      Select Testers ({addAllowedTesterIds.length}/{testers.length})
                     </span>
                   </div>
 
-                  <span className="text-[11px] font-semibold text-blue-600 underline">
-                    Change
-                  </span>
+                  <span className="text-[11px] font-semibold text-blue-600 underline">Change</span>
                 </button>
 
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Only selected testers will see and install this app. Choice is automatically remembered.
+                  Only selected testers will see and install this app. Choice is automatically
+                  remembered.
                 </p>
               </div>
 
               <div className="mt-6 flex justify-end gap-3 pt-2 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() =>
-                    setIsAddModalOpen(
-                      false
-                    )
-                  }
+                  onClick={() => setIsAddModalOpen(false)}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
                 >
                   Cancel
@@ -1648,9 +1403,7 @@ const payingRef = useRef(new Set());
                   disabled={uploading}
                   className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm font-bold shadow-sm"
                 >
-                  {uploading
-                    ? 'Adding...'
-                    : 'Add App'}
+                  {uploading ? 'Adding...' : 'Add App'}
                 </button>
               </div>
             </form>
@@ -1663,26 +1416,17 @@ const payingRef = useRef(new Set());
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
-              <h3 className="text-xl font-bold text-gray-900">
-                Edit App
-              </h3>
+              <h3 className="text-xl font-bold text-gray-900">Edit App</h3>
 
               <button
-                onClick={() =>
-                  setIsEditModalOpen(
-                    false
-                  )
-                }
+                onClick={() => setIsEditModalOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form
-              onSubmit={handleEditSubmit}
-              className="space-y-4"
-            >
+            <form onSubmit={handleEditSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Package Name
@@ -1691,118 +1435,65 @@ const payingRef = useRef(new Set());
                 <input
                   type="text"
                   required
-                  value={
-                    editPackageName
-                  }
-                  onChange={(e) =>
-                    setEditPackageName(
-                      e.target.value
-                    )
-                  }
+                  value={editPackageName}
+                  onChange={(e) => setEditPackageName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  App Name
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">App Name</label>
 
                 <input
                   type="text"
                   required
                   value={editAppName}
-                  onChange={(e) =>
-                    setEditAppName(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setEditAppName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Installed
-                  </label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Installed</label>
 
                   <input
                     type="number"
                     required
                     min="0"
-                    value={
-                      editInstalledCount
-                    }
-                    onChange={(e) =>
-                      setEditInstalledCount(
-                        e.target.value
-                      )
-                    }
+                    value={editInstalledCount}
+                    onChange={(e) => setEditInstalledCount(e.target.value)}
                     className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Start Date
-                  </label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
 
                   <input
                     type="date"
-                    value={
-                      editStartTime
-                    }
+                    value={editStartTime}
                     onChange={(e) => {
-                      setEditStartTime(
-                        e.target.value
-                      );
+                      setEditStartTime(e.target.value);
 
-                      if (
-                        e.target.value
-                      ) {
-                        const startMidnight =
-                          new Date(
-                            e.target.value
-                          );
+                      if (e.target.value) {
+                        const startMidnight = new Date(e.target.value);
 
-                        startMidnight.setHours(
-                          0,
-                          0,
-                          0,
-                          0
-                        );
+                        startMidnight.setHours(0, 0, 0, 0);
 
-                        const nowMidnight =
-                          new Date();
+                        const nowMidnight = new Date();
 
-                        nowMidnight.setHours(
-                          0,
-                          0,
-                          0,
-                          0
-                        );
+                        nowMidnight.setHours(0, 0, 0, 0);
 
                         const days =
                           Math.floor(
-                            Math.max(
-                              0,
-                              nowMidnight.getTime() -
-                                startMidnight.getTime()
-                            ) /
-                              (1000 *
-                                60 *
-                                60 *
-                                24)
+                            Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) /
+                              (1000 * 60 * 60 * 24)
                           ) + 1;
 
-                        setEditDayCount(
-                          days
-                        );
+                        setEditDayCount(days);
                       } else {
-                        setEditDayCount(
-                          0
-                        );
+                        setEditDayCount(0);
                       }
                     }}
                     className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs"
@@ -1810,63 +1501,32 @@ const payingRef = useRef(new Set());
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Days
-                  </label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Days</label>
 
                   <input
                     type="number"
                     required
                     min="0"
-                    value={
-                      editDayCount
-                    }
+                    value={editDayCount}
                     onChange={(e) => {
-                      const days =
-                        Number(
-                          e.target.value
-                        );
+                      const days = Number(e.target.value);
 
-                      setEditDayCount(
-                        days
-                      );
+                      setEditDayCount(days);
 
                       if (days > 0) {
-                        const newStartTime =
-                          new Date();
+                        const newStartTime = new Date();
 
-                        newStartTime.setDate(
-                          newStartTime.getDate() -
-                            days
-                        );
+                        newStartTime.setDate(newStartTime.getDate() - days);
 
-                        const year =
-                          newStartTime.getFullYear();
+                        const year = newStartTime.getFullYear();
 
-                        const month =
-                          String(
-                            newStartTime.getMonth() +
-                              1
-                          ).padStart(
-                            2,
-                            '0'
-                          );
+                        const month = String(newStartTime.getMonth() + 1).padStart(2, '0');
 
-                        const day =
-                          String(
-                            newStartTime.getDate()
-                          ).padStart(
-                            2,
-                            '0'
-                          );
+                        const day = String(newStartTime.getDate()).padStart(2, '0');
 
-                        setEditStartTime(
-                          `${year}-${month}-${day}`
-                        );
+                        setEditStartTime(`${year}-${month}-${day}`);
                       } else {
-                        setEditStartTime(
-                          ''
-                        );
+                        setEditStartTime('');
                       }
                     }}
                     className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs"
@@ -1881,35 +1541,21 @@ const payingRef = useRef(new Set());
 
                 <input
                   type="text"
-                  value={
-                    editAppOwner
-                  }
-                  onChange={(e) =>
-                    setEditAppOwner(
-                      e.target.value
-                    )
-                  }
+                  value={editAppOwner}
+                  onChange={(e) => setEditAppOwner(e.target.value)}
                   placeholder="e.g. Shuvojit or 017..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Price (TK)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price (TK)</label>
 
                 <input
                   type="number"
                   required
-                  value={
-                    editAppPrice
-                  }
-                  onChange={(e) =>
-                    setEditAppPrice(
-                      e.target.value
-                    )
-                  }
+                  value={editAppPrice}
+                  onChange={(e) => setEditAppPrice(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm"
                 />
               </div>
@@ -1922,43 +1568,25 @@ const payingRef = useRef(new Set());
 
                 <button
                   type="button"
-                  onClick={() =>
-                    openTesterSelection(
-                      'edit'
-                    )
-                  }
+                  onClick={() => openTesterSelection('edit')}
                   className="w-full flex items-center justify-between px-3 py-2.5 border border-blue-200 bg-blue-50/60 rounded-xl hover:bg-blue-100/70 transition-colors text-left"
                 >
                   <div className="flex items-center gap-2">
                     <UserCheck className="w-4 h-4 text-blue-600" />
 
                     <span className="text-xs font-bold text-blue-900">
-                      Edit Assigned Testers (
-                      {
-                        editAllowedTesterIds.length
-                      }
-                      /
-                      {
-                        testers.length
-                      }
-                      )
+                      Edit Assigned Testers ({editAllowedTesterIds.length}/{testers.length})
                     </span>
                   </div>
 
-                  <span className="text-[11px] font-semibold text-blue-600 underline">
-                    Change
-                  </span>
+                  <span className="text-[11px] font-semibold text-blue-600 underline">Change</span>
                 </button>
               </div>
 
               <div className="mt-6 flex justify-end gap-3 pt-2 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() =>
-                    setIsEditModalOpen(
-                      false
-                    )
-                  }
+                  onClick={() => setIsEditModalOpen(false)}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
                 >
                   Cancel
@@ -1997,26 +1625,15 @@ const payingRef = useRef(new Set());
             {/* Modal Header */}
             <div className="p-4 border-b border-gray-100 bg-gray-50/70 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-gray-900">
-                  Select Testers
-                </h3>
+                <h3 className="text-base font-bold text-gray-900">Select Testers</h3>
 
                 <p className="text-[11px] text-gray-500">
-                  {
-                    selectedTesterIds.length
-                  }{' '}
-                  of{' '}
-                  {testers.length}{' '}
-                  testers selected
+                  {selectedTesterIds.length} of {testers.length} testers selected
                 </p>
               </div>
 
               <button
-                onClick={() =>
-                  setIsTesterSelectionOpen(
-                    false
-                  )
-                }
+                onClick={() => setIsTesterSelectionOpen(false)}
                 className="p-1 rounded-lg text-gray-400 hover:text-gray-600"
               >
                 <X className="w-5 h-5" />
@@ -2031,14 +1648,8 @@ const payingRef = useRef(new Set());
 
                   <input
                     type="text"
-                    value={
-                      testerSearch
-                    }
-                    onChange={(e) =>
-                      setTesterSearch(
-                        e.target.value
-                      )
-                    }
+                    value={testerSearch}
+                    onChange={(e) => setTesterSearch(e.target.value)}
                     placeholder="Search tester name or email..."
                     className="w-full pl-8 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500"
                   />
@@ -2047,9 +1658,7 @@ const payingRef = useRef(new Set());
                 <div className="flex gap-1.5 shrink-0">
                   <button
                     type="button"
-                    onClick={
-                      handleSelectAllTesters
-                    }
+                    onClick={handleSelectAllTesters}
                     className="px-2 py-1 bg-blue-50 text-blue-600 rounded-md text-[11px] font-bold hover:bg-blue-100"
                   >
                     Select All
@@ -2057,9 +1666,7 @@ const payingRef = useRef(new Set());
 
                   <button
                     type="button"
-                    onClick={
-                      handleDeselectAllTesters
-                    }
+                    onClick={handleDeselectAllTesters}
                     className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-[11px] font-semibold hover:bg-gray-200"
                   >
                     Clear
@@ -2072,50 +1679,32 @@ const payingRef = useRef(new Set());
             <div className="p-2 overflow-y-auto flex-1 divide-y divide-gray-100">
               {testers
                 .filter((t) => {
-                  if (!testerSearch)
-                    return true;
+                  if (!testerSearch) return true;
 
-                  const q =
-                    testerSearch.toLowerCase();
+                  const q = testerSearch.toLowerCase();
 
                   return (
-                    (t.name || '')
-                      .toLowerCase()
-                      .includes(q) ||
-                    (t.email || '')
-                      .toLowerCase()
-                      .includes(q)
+                    (t.name || '').toLowerCase().includes(q) ||
+                    (t.email || '').toLowerCase().includes(q)
                   );
                 })
                 .map((t) => {
-                  const isChecked =
-                    selectedTesterIds.includes(
-                      t.id
-                    );
+                  const isChecked = selectedTesterIds.includes(t.id);
 
                   return (
                     <div
                       key={t.id}
-                      onClick={() =>
-                        handleToggleTesterSelection(
-                          t.id
-                        )
-                      }
+                      onClick={() => handleToggleTesterSelection(t.id)}
                       className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-colors ${
-                        isChecked
-                          ? 'bg-blue-50/50 hover:bg-blue-50'
-                          : 'hover:bg-slate-50'
+                        isChecked ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50'
                       }`}
                     >
                       <div className="min-w-0 pr-3">
                         <div className="text-xs font-bold text-gray-800 truncate">
-                          {t.name ||
-                            'Unknown Tester'}
+                          {t.name || 'Unknown Tester'}
                         </div>
 
-                        <div className="text-[10px] text-gray-400 truncate">
-                          {t.email}
-                        </div>
+                        <div className="text-[10px] text-gray-400 truncate">{t.email}</div>
                       </div>
 
                       <div
@@ -2125,9 +1714,7 @@ const payingRef = useRef(new Set());
                             : 'border-gray-300 bg-white'
                         }`}
                       >
-                        {isChecked && (
-                          <Check className="w-3.5 h-3.5" />
-                        )}
+                        {isChecked && <Check className="w-3.5 h-3.5" />}
                       </div>
                     </div>
                   );
@@ -2137,20 +1724,13 @@ const payingRef = useRef(new Set());
             {/* Modal Footer */}
             <div className="p-3 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
               <span className="text-xs font-medium text-gray-500">
-                {
-                  selectedTesterIds.length
-                }{' '}
-                chosen
+                {selectedTesterIds.length} chosen
               </span>
 
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    setIsTesterSelectionOpen(
-                      false
-                    )
-                  }
+                  onClick={() => setIsTesterSelectionOpen(false)}
                   className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-200 bg-gray-100 rounded-lg font-medium"
                 >
                   Cancel
@@ -2158,9 +1738,7 @@ const payingRef = useRef(new Set());
 
                 <button
                   type="button"
-                  onClick={
-                    handleConfirmTesterSelection
-                  }
+                  onClick={handleConfirmTesterSelection}
                   className="px-4 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-bold shadow-xs"
                 >
                   Confirm & Save
@@ -2191,27 +1769,17 @@ const payingRef = useRef(new Set());
           >
             <div className="flex justify-between items-start p-5 border-b border-gray-100 bg-gray-50/50">
               <div>
-                <h3 className="text-lg font-bold text-gray-900 leading-tight">
-                  Missing Testers
-                </h3>
+                <h3 className="text-lg font-bold text-gray-900 leading-tight">Missing Testers</h3>
 
-                <p className="text-xs text-gray-500 mt-1">
-                  {
-                    missingTestersApp.finalAppName
-                  }
-                </p>
+                <p className="text-xs text-gray-500 mt-1">{missingTestersApp.finalAppName}</p>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    setMissingTestersApp(
-                      null
-                    );
+                    setMissingTestersApp(null);
 
-                    openRemoveTestersModal(
-                      missingTestersApp
-                    );
+                    openRemoveTestersModal(missingTestersApp);
                   }}
                   className="text-red-600 bg-red-50 border border-red-100 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100"
                   title="Remove existing testers from this app"
@@ -2220,11 +1788,7 @@ const payingRef = useRef(new Set());
                 </button>
 
                 <button
-                  onClick={() =>
-                    setMissingTestersApp(
-                      null
-                    )
-                  }
+                  onClick={() => setMissingTestersApp(null)}
                   className="text-gray-400 hover:text-gray-600 bg-white border border-gray-200 p-1.5 rounded-lg"
                 >
                   <X className="w-5 h-5" />
@@ -2234,48 +1798,23 @@ const payingRef = useRef(new Set());
 
             <div className="overflow-y-auto p-2 flex-1">
               {(() => {
-                const testedIds =
-                  missingTestersApp.testerIds ||
-                  [];
+                const testedIds = missingTestersApp.testerIds || [];
 
-                const assignedIds =
-                  Array.isArray(
-                    missingTestersApp.allowedTesterIds
-                  )
-                    ? missingTestersApp.allowedTesterIds
-                    : testers.map(
-                        (t) => t.id
-                      );
+                const assignedIds = Array.isArray(missingTestersApp.allowedTesterIds)
+                  ? missingTestersApp.allowedTesterIds
+                  : testers.map((t) => t.id);
 
-                const assignedTesters =
-                  testers.filter((t) =>
-                    assignedIds.includes(
-                      t.id
-                    )
-                  );
+                const assignedTesters = testers.filter((t) => assignedIds.includes(t.id));
 
-                const missing =
-                  assignedTesters.filter(
-                    (t) =>
-                      !testedIds.includes(
-                        t.id
-                      )
-                  );
+                const missing = assignedTesters.filter((t) => !testedIds.includes(t.id));
 
-                let finalMissingList =
-                  missing;
+                let finalMissingList = missing;
 
-                if (
-                  missingTestersApp.displayTesterCount >=
-                  assignedTesters.length
-                ) {
+                if (missingTestersApp.displayTesterCount >= assignedTesters.length) {
                   finalMissingList = [];
                 }
 
-                if (
-                  finalMissingList.length ===
-                  0
-                ) {
+                if (finalMissingList.length === 0) {
                   return (
                     <div className="p-8 text-center text-emerald-600 font-bold bg-emerald-50 rounded-xl m-3 border border-emerald-100">
                       All assigned testers have installed this app!
@@ -2283,35 +1822,26 @@ const payingRef = useRef(new Set());
                   );
                 }
 
-                return finalMissingList.map(
-                  (t, idx) => (
-                    <div
-                      key={t.id}
-                      className={`flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 ${
-                        idx !==
-                        finalMissingList.length -
-                          1
-                          ? 'border-b border-slate-100'
-                          : ''
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold text-sm text-gray-800">
-                          {t.name ||
-                            'Unknown Tester'}
-                        </div>
-
-                        <div className="text-xs text-gray-500">
-                          {t.email}
-                        </div>
+                return finalMissingList.map((t, idx) => (
+                  <div
+                    key={t.id}
+                    className={`flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 ${
+                      idx !== finalMissingList.length - 1 ? 'border-b border-slate-100' : ''
+                    }`}
+                  >
+                    <div>
+                      <div className="font-bold text-sm text-gray-800">
+                        {t.name || 'Unknown Tester'}
                       </div>
 
-                      <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-md text-[10px] font-bold border border-red-100">
-                        Not Installed
-                      </span>
+                      <div className="text-xs text-gray-500">{t.email}</div>
                     </div>
-                  )
-                );
+
+                    <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-md text-[10px] font-bold border border-red-100">
+                      Not Installed
+                    </span>
+                  </div>
+                ));
               })()}
             </div>
           </motion.div>
@@ -2319,155 +1849,115 @@ const payingRef = useRef(new Set());
       )}
 
       {/* Remove Testers Modal */}
-      {isRemoveModalOpen &&
-        selectedAppForRemoval && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{
-                opacity: 0,
-                y: 20,
-              }}
-              animate={{
-                opacity: 1,
-                y: 0,
-              }}
-              exit={{
-                opacity: 0,
-                y: -20,
-              }}
-              className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]"
-            >
-              <div className="flex justify-between items-start p-5 border-b border-gray-100 bg-gray-50/50">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 leading-tight">
-                    Manage Testers
-                  </h3>
+      {isRemoveModalOpen && selectedAppForRemoval && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{
+              opacity: 0,
+              y: 20,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            exit={{
+              opacity: 0,
+              y: -20,
+            }}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]"
+          >
+            <div className="flex justify-between items-start p-5 border-b border-gray-100 bg-gray-50/50">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 leading-tight">Manage Testers</h3>
 
-                  <p className="text-xs text-gray-500 mt-1">
-                    {
-                      selectedAppForRemoval.finalAppName
-                    }
-                  </p>
-                </div>
-
-                <button
-                  onClick={
-                    closeRemoveTestersModal
-                  }
-                  className="text-gray-400 hover:text-gray-600 bg-white border border-gray-200 p-1.5 rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <p className="text-xs text-gray-500 mt-1">{selectedAppForRemoval.finalAppName}</p>
               </div>
 
-              <div className="overflow-y-auto p-2 flex-1">
-                {(() => {
-                  const installedTesters =
-                    testers.filter((t) =>
-                      (
-                        selectedAppForRemoval.testerIds ||
-                        []
-                      ).includes(t.id)
-                    );
+              <button
+                onClick={closeRemoveTestersModal}
+                className="text-gray-400 hover:text-gray-600 bg-white border border-gray-200 p-1.5 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-                  if (
-                    installedTesters.length ===
-                    0
-                  ) {
-                    return (
-                      <div className="p-8 text-center text-slate-500 font-medium">
-                        No testers have installed this app.
-                      </div>
-                    );
-                  }
+            <div className="overflow-y-auto p-2 flex-1">
+              {(() => {
+                const installedTesters = testers.filter((t) =>
+                  (selectedAppForRemoval.testerIds || []).includes(t.id)
+                );
 
-                  return installedTesters.map(
-                    (t, idx) => (
-                      <div
-                        key={t.id}
-                        className={`flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 ${
-                          idx !==
-                          installedTesters.length -
-                            1
-                            ? 'border-b border-slate-100'
-                            : ''
-                        }`}
-                      >
-                        <div>
-                          <div className="font-bold text-sm text-gray-800">
-                            {t.name ||
-                              'Unknown Tester'}
-                          </div>
-
-                          <div className="text-xs text-gray-500">
-                            {t.email}
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() =>
-                            handleRemoveTester(
-                              selectedAppForRemoval.id,
-                              t.id
-                            )
-                          }
-                          className="p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors"
-                          title="Remove Tester"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    )
+                if (installedTesters.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-slate-500 font-medium">
+                      No testers have installed this app.
+                    </div>
                   );
-                })()}
-              </div>
+                }
 
-              <div className="p-4 bg-slate-50/70 border-t border-slate-100 h-[60px] flex items-center">
-                <AnimatePresence>
-                  {recentlyRemoved && (
-                    <motion.div
-                      initial={{
-                        opacity: 0,
-                        x: -20,
-                      }}
-                      animate={{
-                        opacity: 1,
-                        x: 0,
-                      }}
-                      exit={{
-                        opacity: 0,
-                        x: -20,
-                      }}
-                      className="flex items-center gap-3"
+                return installedTesters.map((t, idx) => (
+                  <div
+                    key={t.id}
+                    className={`flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 ${
+                      idx !== installedTesters.length - 1 ? 'border-b border-slate-100' : ''
+                    }`}
+                  >
+                    <div>
+                      <div className="font-bold text-sm text-gray-800">
+                        {t.name || 'Unknown Tester'}
+                      </div>
+
+                      <div className="text-xs text-gray-500">{t.email}</div>
+                    </div>
+
+                    <button
+                      onClick={() => handleRemoveTester(selectedAppForRemoval.id, t.id)}
+                      className="p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors"
+                      title="Remove Tester"
                     >
-                      <p className="text-sm text-slate-600">
-                        Removed{' '}
-                        <span className="font-bold">
-                          {
-                            recentlyRemoved
-                              .tester
-                              .name
-                          }
-                        </span>
-                        .
-                      </p>
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                ));
+              })()}
+            </div>
 
-                      <button
-                        onClick={
-                          handleUndoRemove
-                        }
-                        className="flex items-center gap-1.5 text-sm font-bold text-blue-600 hover:underline"
-                      >
-                        <Undo2 className="w-4 h-4" />
-                        Undo
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          </div>
-        )}
+            <div className="p-4 bg-slate-50/70 border-t border-slate-100 h-[60px] flex items-center">
+              <AnimatePresence>
+                {recentlyRemoved && (
+                  <motion.div
+                    initial={{
+                      opacity: 0,
+                      x: -20,
+                    }}
+                    animate={{
+                      opacity: 1,
+                      x: 0,
+                    }}
+                    exit={{
+                      opacity: 0,
+                      x: -20,
+                    }}
+                    className="flex items-center gap-3"
+                  >
+                    <p className="text-sm text-slate-600">
+                      Removed <span className="font-bold">{recentlyRemoved.tester.name}</span>.
+                    </p>
+
+                    <button
+                      onClick={handleUndoRemove}
+                      className="flex items-center gap-1.5 text-sm font-bold text-blue-600 hover:underline"
+                    >
+                      <Undo2 className="w-4 h-4" />
+                      Undo
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

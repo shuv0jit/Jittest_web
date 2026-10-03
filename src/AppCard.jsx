@@ -182,7 +182,7 @@ export default function AppCard({
       '_blank'
     );
 
-          try {
+                try {
       const logRef = doc(db, 'testingLogs', user.email);
       const snap = await getDoc(logRef);
 
@@ -193,24 +193,32 @@ export default function AppCard({
       const todayApps = Array.isArray(todayEntry.apps) ? todayEntry.apps : [];
 
       if (todayApps.includes(app.id)) {
-        // Already logged — nothing to write
+        // Already logged this app today — don't double-count, don't write.
         setTestedToday(true);
         if (playWindow) playWindow.focus();
         return;
       }
 
-      // Strip app-id lists from every day except today, so history only
-      // ever keeps { time } — app ids never persist past the day they're tested.
+      // Every day except today is trimmed to just { time, count } —
+      // app ids never persist past the day they were tested.
       const cleaned = {};
       Object.keys(tested).forEach((dateKey) => {
         if (dateKey === today) return;
         const entry = tested[dateKey];
-        cleaned[dateKey] = entry?.time ? { time: entry.time } : entry;
+        cleaned[dateKey] = entry?.time
+          ? {
+              time: entry.time,
+              count: typeof entry.count === 'number' ? entry.count : (entry.apps?.length ?? 0),
+            }
+          : entry;
       });
+
+      const updatedApps = [...todayApps, app.id];
 
       cleaned[today] = {
         time: todayEntry.time || new Date().toISOString(),
-        apps: [...todayApps, app.id],
+        apps: updatedApps, // transient — only exists intraday, stripped above once the day passes
+        count: updatedApps.length,
       };
 
       await setDoc(logRef, { tested: cleaned });

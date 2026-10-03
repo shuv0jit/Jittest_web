@@ -129,20 +129,21 @@ function getDayStatus(logs, email, dateStr) {
   const entry = logs[email]?.tested?.[dateStr];
 
   if (entry === undefined || entry === null) {
-    return { tested: false, time: null };
+    return { tested: false, time: null, count: 0 };
   }
   if (Array.isArray(entry)) {
-    return { tested: entry.length > 0, time: null };
+    return { tested: entry.length > 0, time: null, count: entry.length };
   }
   if (typeof entry === 'boolean') {
-    return { tested: entry, time: null };
+    return { tested: entry, time: null, count: 0 };
   }
   if (typeof entry === 'object') {
     const time = entry.time || entry.testedAt || null;
-    return { tested: true, time };
+    const count = typeof entry.count === 'number' ? entry.count : 0;
+    return { tested: true, time, count };
   }
 
-  return { tested: Boolean(entry), time: null };
+  return { tested: Boolean(entry), time: null, count: 0 };
 }
 
 /** Builds calendar month grids (with leading/trailing blanks) from START_DATE to endDate. */
@@ -361,9 +362,9 @@ export default function AdminTestingInfo() {
           name: email.split('@')[0],
         };
 
-        const { tested, time } = getDayStatus(logs, email, today);
+        const { tested, time, count } = getDayStatus(logs, email, today);
 
-        return { ...user, complete: tested, time };
+        return { ...user, complete: tested, time, count };
       })
       .sort((a, b) => Number(b.complete) - Number(a.complete));
   }, [activeTesters, testerList, logs, today]);
@@ -759,7 +760,9 @@ export default function AdminTestingInfo() {
                       {tester.name}
                     </span>
 
-                    <span className="text-[8px] text-emerald-500 mt-0.5">Tested</span>
+                                        <span className="text-[8px] text-emerald-500 mt-0.5">
+                      {tester.count || 0} tested
+                    </span>
                   </button>
                 ))
               )}
