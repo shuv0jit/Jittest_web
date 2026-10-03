@@ -106,76 +106,70 @@ export default function AdminPanel() {
   });
 
   // Background Check: Generate Alerts for Apps reaching 7 and 15 days
-  const checkAppsForNotifications = async () => {
-    try {
-      const appsSnap = await getDocs(collection(db, 'apps'));
-      const now = Date.now();
+const checkAppsForNotifications = async () => {
+  try {
+    const appsSnap = await getDocs(collection(db, 'apps'));
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
 
-      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-      const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
-
-      appsSnap.forEach(async (appDoc) => {
+    for (const appDoc of appsSnap.docs) {
+      try {
         const app = appDoc.data();
+        if (!app.startTime || app.isPaidByAdmin) continue;
+        if (app.status && app.status !== 'Ongoing') continue;
 
-        // Only check ongoing apps
-        if (
-          app.startTime &&
-          !app.isPaidByAdmin &&
-          (app.status === 'Ongoing' || !app.status)
-        ) {
-          const startTimeMs = app.startTime.toDate().getTime();
-          const daysActive = Math.floor(
-            (now - startTimeMs) / (1000 * 60 * 60 * 24)
-          );
+      const startDate = app.startTime.toDate
+  ? app.startTime.toDate()
+  : new Date(app.startTime);
 
-          // ==============================
-          // 7-DAY ADVANCE PAYMENT REMINDER
-          // ==============================
-          if (
-            daysActive >= 7 &&
-            !app.advanceNotificationCreated
-          ) {
-            await addDoc(collection(db, 'notifications'), {
-              type: 'advance_reminder',
-              title: 'Advance Payment Reminder',
-              message: `App "${app.appName || 'Unknown App'}" has completed 7 days of smooth testing. Please take the advance payment from the owner.`,
-              createdAt: serverTimestamp(),
-              owner: app.owner || '',
-              appName: app.appName || 'Unknown App'
-            });
+const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
+const t = new Date();
+const todayDay = new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
 
-            await updateDoc(doc(db, 'apps', appDoc.id), {
-              advanceNotificationCreated: true
-            });
-          }
+const daysActive = Math.round((todayDay - startDay) / DAY);
 
-          // ==============================
-          // 15-DAY PRODUCTION REMINDER
-          // ==============================
-          if (
-            daysActive >= 15 &&
-            !app.productionNotificationCreated
-          ) {
-            await addDoc(collection(db, 'notifications'), {
-              type: 'production_reminder',
-              title: 'Production Reminder',
-              message: `App "${app.appName || 'Unknown App'}" has been in testing for 15 days. Consider moving it to production.`,
-              createdAt: serverTimestamp(),
-              owner: app.owner || '',
-              appName: app.appName || 'Unknown App'
-            });
+        console.log('[notif-check]', app.appName, 'days:', daysActive, 'adv:', app.advanceNotificationCreated);
 
-            await updateDoc(doc(db, 'apps', appDoc.id), {
-              productionNotificationCreated: true
-            });
-          }
+        if (daysActive >= 7 && !app.advanceNotificationCreated) {
+          await updateDoc(doc(db, 'apps', appDoc.id), { advanceNotificationCreated: true });
+          await addDoc(collection(db, 'notifications'), {
+            type: 'advance_reminder',
+            title: 'Advance Payment Reminder',
+            message: `App "${app.appName || 'Unknown App'}" has completed 7 days of smooth testing. Please take the advance payment from the owner.`,
+            createdAt: serverTimestamp(),
+            owner: app.owner || '',
+            appName: app.appName || 'Unknown App'
+          });
         }
-      });
-    } catch (error) {
-    }
-  };
 
-  checkAppsForNotifications();
+        if (daysActive >= 15 && !app.productionNotificationCreated) {
+          await updateDoc(doc(db, 'apps', appDoc.id), { productionNotificationCreated: true });
+          await addDoc(collection(db, 'notifications'), {
+            type: 'production_reminder',
+            title: 'Production Reminder',
+            message: `App "${app.appName || 'Unknown App'}" has been in testing for 15 days. Consider moving it to production.`,
+            createdAt: serverTimestamp(),
+            owner: app.owner || '',
+            appName: app.appName || 'Unknown App'
+          });
+        }
+      } catch (err) {
+        console.error('Notif check failed for', appDoc.id, err);
+      }
+    }
+  } catch (error) {
+    console.error('Notif check failed:', error);
+  }
+};
+
+checkAppsForNotifications();
+const interval = setInterval(checkAppsForNotifications, 60 * 60 * 1000); // hourly while panel is open
+
+return () => {
+  unsub();
+  unsubWithdrawals();
+  clearInterval(interval);
+};
 
   return () => {
     unsub();
