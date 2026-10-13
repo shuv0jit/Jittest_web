@@ -7,7 +7,6 @@ import {
   getDoc,
   getDocs,
   setDoc,
-  updateDoc,
   query,
   where,
   documentId,
@@ -28,6 +27,9 @@ import {
 } from 'lucide-react';
 
 const START_DATE = '2026-09-17';
+
+// Not forced into the active list — behaves like any other tester,
+// except the current day is always auto-counted as tested for him.
 const SPECIAL_TESTER = 'shuvojitgb@gmail.com';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -120,10 +122,10 @@ function getInitials(name) {
 
 /**
  * A tester's daily log entry may be:
- *  - an array (legacy: list of tested app ids) -> tested if non-empty, no time
- *  - a boolean -> tested if true, no time
- *  - an object like { time: <ISO string> } -> tested, with a time
- * We never read/derive how many apps were tested — only whether the day is tested.
+ *  - an array (legacy: list of tested app ids) -> tested if non-empty
+ *  - a boolean -> tested if true
+ *  - an object { time, count, disabled } -> tested unless disabled === true
+ *    (disabled keeps the app count in the database, the day just counts as missed)
  */
 function getDayStatus(logs, email, dateStr) {
   const entry = logs[email]?.tested?.[dateStr];
@@ -140,10 +142,34 @@ function getDayStatus(logs, email, dateStr) {
   if (typeof entry === 'object') {
     const time = entry.time || entry.testedAt || null;
     const count = typeof entry.count === 'number' ? entry.count : 0;
-    return { tested: true, time, count };
+    return { tested: entry.disabled !== true, time, count };
   }
 
   return { tested: Boolean(entry), time: null, count: 0 };
+}
+
+/** Builds the new day entry for a toggle, always preserving the app count. */
+function buildDayEntry(prev, markTested) {
+  let base = {};
+
+  if (Array.isArray(prev)) {
+    base = { apps: prev, count: prev.length };
+  } else if (prev && typeof prev === 'object') {
+    base = { ...prev };
+  }
+
+  const count = typeof base.count === 'number' ? base.count : 0;
+
+  if (markTested) {
+    return {
+      ...base,
+      count,
+      time: base.time || base.testedAt || new Date().toISOString(),
+      disabled: false,
+    };
+  }
+
+  return { ...base, count, disabled: true };
 }
 
 /** Builds calendar month grids (with leading/trailing blanks) from START_DATE to endDate. */
@@ -193,6 +219,8 @@ export default function AdminTestingInfo() {
 
   const [calendarTester, setCalendarTester] = useState(null);
 
+  const [viewDay, setViewDay] = useState('today'); // 'today' | 'yesterday'
+
   const [missedOption, setMissedOption] = useState('none'); // 'none' | 'yesterday' | 'custom'
   const [missedCustomDate, setMissedCustomDate] = useState('');
 
@@ -209,6 +237,68 @@ export default function AdminTestingInfo() {
 
   const today = getBDDate();
   const yesterday = getYesterday();
+  const viewDate = viewDay === 'today' ? today : yesterday;
+
+  // --------------------------------------------------
+  // FIRESTORE HELPERS
+  // --------------------------------------------------
+
+  /** Reads testingLogs docs for the given emails (30 per query). */
+  const fetchLogs = async (emails) => {
+    const result = {};
+    const unique = [...new Set(emails)];
+
+    for (let i = 0; i < unique.length; i += 30) {
+      const emailBatch = unique.slice(i, i + 30);
+      if (!emailBatch.length) continue;
+
+      const logsQuery = query(
+        collection(db, 'testingLogs'),
+        where(documentId(), 'in', emailBatch)
+      );
+
+      const logsSnap = await getDocs(logsQuery);
+      logsSnap.forEach((d) => {
+        result[d.id] = d.data();
+      });
+    }
+
+    return result;
+  };
+
+  /**
+   * The special tester is auto-counted as tested for the current day.
+   * Only written when today has no entry yet, so a manual change is respected.
+   */
+  const ensureSpecialToday = async (emails, logsData) => {
+    if (!emails.includes(SPECIAL_TESTER)) return logsData;
+
+    const existing = logsData[SPECIAL_TESTER]?.tested?.[today];
+    if (existing !== undefined && existing !== null) return logsData;
+
+    const newEntry = { time: new Date().toISOString(), count: 0, disabled: false };
+
+    try {
+      await setDoc(
+        doc(db, 'testingLogs', SPECIAL_TESTER),
+        { tested: { [today]: newEntry } },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error('Special tester auto-mark error:', error);
+    }
+
+    return {
+      ...logsData,
+      [SPECIAL_TESTER]: {
+        ...(logsData[SPECIAL_TESTER] || {}),
+        tested: {
+          ...(logsData[SPECIAL_TESTER]?.tested || {}),
+          [today]: newEntry,
+        },
+      },
+    };
+  };
 
   // --------------------------------------------------
   // LOAD CORE DATA (active testers + their logs only)
@@ -218,35 +308,11 @@ export default function AdminTestingInfo() {
     setLoading(true);
 
     try {
-      // 1. Active tester settings — 1 read
-      const settingsRef = doc(db, 'testingSettings', 'activeTesters');
-      const settingsSnap = await getDoc(settingsRef);
+      const settingsSnap = await getDoc(doc(db, 'testingSettings', 'activeTesters'));
+      const savedActive = settingsSnap.exists() ? settingsSnap.data().emails || [] : [];
 
-      let savedActive = settingsSnap.exists() ? settingsSnap.data().emails || [] : [];
-
-      if (!savedActive.includes(SPECIAL_TESTER)) {
-        savedActive = [...savedActive, SPECIAL_TESTER];
-        await setDoc(settingsRef, { emails: savedActive }, { merge: true });
-      }
-
-      // 2. Logs for active testers only (needed for "Tested today" + "All testers")
-      const logsData = {};
-      const activeEmails = [...new Set(savedActive)];
-
-      for (let i = 0; i < activeEmails.length; i += 30) {
-        const emailBatch = activeEmails.slice(i, i + 30);
-        if (!emailBatch.length) continue;
-
-        const logsQuery = query(
-          collection(db, 'testingLogs'),
-          where(documentId(), 'in', emailBatch)
-        );
-
-        const logsSnap = await getDocs(logsQuery);
-        logsSnap.forEach((d) => {
-          logsData[d.id] = d.data();
-        });
-      }
+      let logsData = await fetchLogs(savedActive);
+      logsData = await ensureSpecialToday(savedActive, logsData);
 
       setLogs(logsData);
       setActiveTesters(savedActive);
@@ -261,6 +327,7 @@ export default function AdminTestingInfo() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --------------------------------------------------
@@ -310,19 +377,21 @@ export default function AdminTestingInfo() {
 
     Object.keys(logs).forEach((email) => {
       if (!map[email]) {
-        map[email] = { email, name: email.split('@')[0] };
+        map[email] = {
+          email,
+          name: email === SPECIAL_TESTER ? 'Shuvojit' : email.split('@')[0],
+        };
       }
     });
 
     activeTesters.forEach((email) => {
       if (!map[email]) {
-        map[email] = { email, name: email.split('@')[0] };
+        map[email] = {
+          email,
+          name: email === SPECIAL_TESTER ? 'Shuvojit' : email.split('@')[0],
+        };
       }
     });
-
-    if (!map[SPECIAL_TESTER]) {
-      map[SPECIAL_TESTER] = { email: SPECIAL_TESTER, name: 'Shuvojit' };
-    }
 
     return Object.values(map);
   }, [allUsers, logs, activeTesters]);
@@ -339,10 +408,14 @@ export default function AdminTestingInfo() {
 
     activeTesters.forEach((email) => {
       if (!map[email]) {
-        map[email] = { email, name: email.split('@')[0] };
+        map[email] = {
+          email,
+          name: email === SPECIAL_TESTER ? 'Shuvojit' : email.split('@')[0],
+        };
       }
     });
 
+    // Keep him selectable in the roster, but he is not forced active.
     if (!map[SPECIAL_TESTER]) {
       map[SPECIAL_TESTER] = { email: SPECIAL_TESTER, name: 'Shuvojit' };
     }
@@ -351,7 +424,7 @@ export default function AdminTestingInfo() {
   }, [allUsers, activeTesters]);
 
   // --------------------------------------------------
-  // TODAY
+  // SELECTED DAY (today / yesterday) — uses already-loaded logs, no extra reads
   // --------------------------------------------------
 
   const activeTesterData = useMemo(() => {
@@ -362,15 +435,15 @@ export default function AdminTestingInfo() {
           name: email.split('@')[0],
         };
 
-        const { tested, time, count } = getDayStatus(logs, email, today);
+        const { tested, time, count } = getDayStatus(logs, email, viewDate);
 
         return { ...user, complete: tested, time, count };
       })
       .sort((a, b) => Number(b.complete) - Number(a.complete));
-  }, [activeTesters, testerList, logs, today]);
+  }, [activeTesters, testerList, logs, viewDate]);
 
-  const todayComplete = activeTesterData.filter((t) => t.complete);
-  const todayNotTested = activeTesterData.filter((t) => !t.complete);
+  const dayComplete = activeTesterData.filter((t) => t.complete);
+  const dayNotTested = activeTesterData.filter((t) => !t.complete);
 
   // --------------------------------------------------
   // MISSED REPORT — nothing computed until a period is chosen
@@ -456,8 +529,6 @@ export default function AdminTestingInfo() {
   // --------------------------------------------------
 
   const toggleActiveTester = (email) => {
-    if (email === SPECIAL_TESTER) return;
-
     setSelectedActive((prev) =>
       prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email]
     );
@@ -467,11 +538,7 @@ export default function AdminTestingInfo() {
     setSavingActive(true);
 
     try {
-      let finalList = [...selectedActive];
-
-      if (!finalList.includes(SPECIAL_TESTER)) {
-        finalList.push(SPECIAL_TESTER);
-      }
+      const finalList = [...selectedActive];
 
       await setDoc(
         doc(db, 'testingSettings', 'activeTesters'),
@@ -479,12 +546,17 @@ export default function AdminTestingInfo() {
         { merge: true }
       );
 
+      // Only read logs for testers we don't have yet.
+      const missingEmails = finalList.filter((email) => !(email in logs));
+      const fetched = missingEmails.length ? await fetchLogs(missingEmails) : {};
+
+      let merged = { ...logs, ...fetched };
+      merged = await ensureSpecialToday(finalList, merged);
+
+      setLogs(merged);
       setActiveTesters(finalList);
       setSelectedActive(finalList);
       setActiveModal(false);
-
-      // Active roster changed — refresh logs for the new set.
-      await loadData();
     } catch (error) {
       console.error(error);
       alert('Could not save active testers.');
@@ -494,63 +566,47 @@ export default function AdminTestingInfo() {
   };
 
   // --------------------------------------------------
-  // REMOVE TESTER TODAY
+  // SET A DAY TESTED / NOT TESTED (app count is always kept)
   // --------------------------------------------------
+
+  const setTesterDay = async (email, dateStr, markTested) => {
+    try {
+      const prevEntry = logs[email]?.tested?.[dateStr];
+      const newEntry = buildDayEntry(prevEntry, markTested);
+
+      await setDoc(
+        doc(db, 'testingLogs', email),
+        { tested: { [dateStr]: newEntry } },
+        { merge: true }
+      );
+
+      setLogs((prev) => ({
+        ...prev,
+        [email]: {
+          ...(prev[email] || {}),
+          tested: {
+            ...(prev[email]?.tested || {}),
+            [dateStr]: newEntry,
+          },
+        },
+      }));
+    } catch (error) {
+      console.error(error);
+      alert('Could not update that date.');
+    }
+  };
+
+  const toggleTesterDay = (email, dateStr) => {
+    const { tested } = getDayStatus(logs, email, dateStr);
+    return setTesterDay(email, dateStr, !tested);
+  };
 
   const removeTesterToday = async (email) => {
     if (!window.confirm(`Remove ${email} from today's testing?`)) {
       return;
     }
 
-    try {
-      const logRef = doc(db, 'testingLogs', email);
-      const snap = await getDoc(logRef);
-
-      if (!snap.exists()) return;
-
-      const data = snap.data();
-      const tested = { ...(data.tested || {}) };
-      tested[today] = false;
-
-      await updateDoc(logRef, { tested });
-
-      setLogs((prev) => ({
-        ...prev,
-        [email]: { ...prev[email], tested },
-      }));
-    } catch (error) {
-      console.error(error);
-      alert('Could not remove tester from today.');
-    }
-  };
-
-    const updateTesterDay = async (email, dateStr, markTested) => {
-    const confirmMsg = markTested
-      ? `Mark ${dateStr} as tested for ${email}?`
-      : `Delete the testing record for ${dateStr}?`;
-
-    if (!window.confirm(confirmMsg)) return;
-
-    try {
-      const logRef = doc(db, 'testingLogs', email);
-      const snap = await getDoc(logRef);
-
-      if (!snap.exists()) return;
-
-      const data = snap.data();
-      const tested = { ...(data.tested || {}) };
-      tested[dateStr] = markTested ? { time: new Date().toISOString() } : false;
-
-      await updateDoc(logRef, { tested });
-
-      setLogs((prev) => ({
-        ...prev,
-        [email]: { ...prev[email], tested },
-      }));
-    } catch (error) {
-      console.error(error);
-      alert('Could not update that date.');
-    }
+    await setTesterDay(email, today, false);
   };
 
   // --------------------------------------------------
@@ -679,25 +735,45 @@ export default function AdminTestingInfo() {
         </button>
 
         {/* ============================================
-            TESTED TODAY
+            TESTED TODAY / YESTERDAY
         ============================================ */}
 
         <section className="mb-7">
           <div className="flex items-end justify-between mb-2.5">
             <div>
               <div className="flex items-center gap-2">
-                <h2
-                  className={`text-[15px] font-semibold ${
-                    darkMode ? 'text-slate-200' : 'text-slate-800'
+                <div
+                  className={`flex items-center gap-0.5 p-0.5 rounded-lg border ${
+                    darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                   }`}
                 >
-                  Tested today
-                </h2>
+                  {[
+                    ['today', 'Tested today'],
+                    ['yesterday', 'Tested yesterday'],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setViewDay(value)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${
+                        viewDay === value
+                          ? 'bg-blue-600 text-white'
+                          : darkMode
+                          ? 'text-slate-500 hover:text-slate-300'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 font-medium">
-                  {todayComplete.length}/{activeTesters.length}
+                  {dayComplete.length}/{activeTesters.length}
                 </span>
               </div>
-              <p className={`text-[10px] mt-0.5 ${muted}`}>Tap a tester to view history</p>
+              <p className={`text-[10px] mt-1 ${muted}`}>
+                {formatDate(viewDate)} · Tap a tester to view history
+              </p>
             </div>
 
             <button
@@ -707,24 +783,26 @@ export default function AdminTestingInfo() {
               <UserX size={13} />
               Missed
               <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-50 flex items-center justify-center text-[9px]">
-                {todayNotTested.length}
+                {dayNotTested.length}
               </span>
             </button>
           </div>
 
           <div
             className={`w-full overflow-x-auto scrollbar-hide ${
-              todayComplete.length ? '' : 'overflow-hidden'
+              dayComplete.length ? '' : 'overflow-hidden'
             }`}
             style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
           >
             <div className="flex gap-2.5 min-w-max pb-1">
-              {todayComplete.length === 0 ? (
+              {dayComplete.length === 0 ? (
                 <div className={`px-4 py-3 rounded-xl border text-[11px] ${card} ${muted}`}>
-                  No tester has tested yet today.
+                  {viewDay === 'today'
+                    ? 'No tester has tested yet today.'
+                    : 'No tester tested yesterday.'}
                 </div>
               ) : (
-                todayComplete.map((tester) => (
+                dayComplete.map((tester) => (
                   <button
                     key={tester.email}
                     onClick={() => openCalendar(tester)}
@@ -760,7 +838,7 @@ export default function AdminTestingInfo() {
                       {tester.name}
                     </span>
 
-                                        <span className="text-[8px] text-emerald-500 mt-0.5">
+                    <span className="text-[8px] text-emerald-500 mt-0.5">
                       {tester.count || 0} tested
                     </span>
                   </button>
@@ -1041,7 +1119,6 @@ export default function AdminTestingInfo() {
               ) : (
                 manageTesterList.map((tester) => {
                   const checked = selectedActive.includes(tester.email);
-                  const isSpecial = tester.email === SPECIAL_TESTER;
 
                   return (
                     <button
@@ -1083,12 +1160,6 @@ export default function AdminTestingInfo() {
                         </div>
                         <div className="text-[9px] text-slate-400 truncate">{tester.email}</div>
                       </div>
-
-                      {isSpecial && (
-                        <span className="text-[7px] font-semibold px-1.5 py-1 rounded-md bg-blue-600 text-white">
-                          ALWAYS
-                        </span>
-                      )}
                     </button>
                   );
                 })
@@ -1109,7 +1180,7 @@ export default function AdminTestingInfo() {
       )}
 
       {/* ==================================================
-          NOT TESTED MODAL
+          NOT TESTED MODAL (selected day)
       ================================================== */}
 
       {notTestedModal && (
@@ -1122,7 +1193,7 @@ export default function AdminTestingInfo() {
             <div className="px-4 py-3.5 flex items-center justify-between border-b border-slate-200/10">
               <div>
                 <h3 className="text-[15px] font-semibold">Not tested</h3>
-                <p className="text-[10px] text-slate-400">{formatDate(today)}</p>
+                <p className="text-[10px] text-slate-400">{formatDate(viewDate)}</p>
               </div>
 
               <button
@@ -1134,12 +1205,12 @@ export default function AdminTestingInfo() {
             </div>
 
             <div className="p-3 overflow-y-auto max-h-[60vh] space-y-1.5">
-              {todayNotTested.length === 0 ? (
+              {dayNotTested.length === 0 ? (
                 <div className="p-7 text-center text-emerald-500 text-[11px] font-medium">
-                  Everyone tested today.
+                  Everyone tested {viewDay === 'today' ? 'today' : 'yesterday'}.
                 </div>
               ) : (
-                todayNotTested.map((tester) => (
+                dayNotTested.map((tester) => (
                   <div
                     key={tester.email}
                     className={`flex items-center gap-2.5 p-2.5 rounded-xl ${
@@ -1171,7 +1242,7 @@ export default function AdminTestingInfo() {
       )}
 
       {/* ==================================================
-          TESTER CALENDAR MODAL — real calendar grid, BD time
+          TESTER CALENDAR MODAL — click a date to toggle tested / not tested
       ================================================== */}
 
       {calendarTester && (
@@ -1235,6 +1306,10 @@ export default function AdminTestingInfo() {
               </div>
             </div>
 
+            <p className="px-4 pb-2 text-[9px] text-slate-400 shrink-0">
+              Tap a date to switch it between tested and not tested.
+            </p>
+
             {/* CALENDAR GRID */}
             <div className="px-3 pb-3 overflow-y-auto">
               {calendarMonths.map((monthData) => (
@@ -1269,18 +1344,15 @@ export default function AdminTestingInfo() {
                         const inRange = dateStr >= START_DATE && dateStr <= today;
 
                         if (!inRange) {
-                                                  return (
-                          <button
-                            key={cIdx}
-                            title={dateStr}
-                            onClick={() =>
-                              updateTesterDay(calendarTester.email, dateStr, !tested)
-                            }
-                            className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 border transition hover:opacity-75 ${   darkMode ? 'text-slate-700' : 'text-slate-300'
+                          return (
+                            <div
+                              key={cIdx}
+                              className={`aspect-square rounded-lg flex items-center justify-center text-[10px] ${
+                                darkMode ? 'text-slate-700' : 'text-slate-300'
                               }`}
                             >
                               {cellDate.getDate()}
-                            </button>
+                            </div>
                           );
                         }
 
@@ -1292,10 +1364,11 @@ export default function AdminTestingInfo() {
                         const timeLabel = formatTimeBD(time);
 
                         return (
-                          <div
+                          <button
                             key={cIdx}
-                            title={dateStr}
-                            className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 border ${
+                            title={`${dateStr} — click to mark ${tested ? 'not tested' : 'tested'}`}
+                            onClick={() => toggleTesterDay(calendarTester.email, dateStr)}
+                            className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 border transition hover:opacity-75 active:scale-95 ${
                               tested
                                 ? darkMode
                                   ? 'bg-emerald-950/40 border-emerald-900/60'
@@ -1327,7 +1400,7 @@ export default function AdminTestingInfo() {
                                 {timeLabel}
                               </span>
                             )}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
