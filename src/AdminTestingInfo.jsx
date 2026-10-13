@@ -839,7 +839,7 @@ export default function AdminTestingInfo() {
                     </span>
 
                     <span className="text-[8px] text-emerald-500 mt-0.5">
-                      {tester.count || 0} tested
+                      {tester.email === SPECIAL_TESTER ? 'All' : tester.count || 0} Tested
                     </span>
                   </button>
                 ))
