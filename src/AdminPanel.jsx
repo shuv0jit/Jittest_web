@@ -7,7 +7,7 @@ import AdminNotifications from './AdminNotifications';
 import AdminShares from './AdminTestingInfo';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
-import { collection, onSnapshot, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, runTransaction, onSnapshot, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { LayoutDashboard, Users, CreditCard, LogOut, History, Menu, X, Bell, Calculator, Undo, Redo } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -142,17 +142,22 @@ const daysActive = Math.round((todayDay - startDay) / DAY);
           });
         }
 
-        if (daysActive >= 15 && !app.productionNotificationCreated) {
-          await updateDoc(doc(db, 'apps', appDoc.id), { productionNotificationCreated: true });
-          await addDoc(collection(db, 'notifications'), {
-            type: 'production_reminder',
-            title: 'Production Reminder',
-            message: `App "${app.appName || 'Unknown App'}" has been in testing for 15 days. Consider moving it to production.`,
-            createdAt: serverTimestamp(),
-            owner: app.owner || '',
-            appName: app.appName || 'Unknown App'
-          });
-        }
+       if (daysActive >= 15 && !app.productionNotificationCreated) {
+  await runTransaction(db, async (tx) => {
+    const ref = doc(db, 'apps', appDoc.id);
+    const snap = await tx.get(ref);
+    if (!snap.exists() || snap.data().productionNotificationCreated) return;
+    tx.update(ref, { productionNotificationCreated: true });
+    tx.set(doc(collection(db, 'notifications')), {
+      type: 'production_reminder',
+      title: 'Production Reminder',
+      message: `App "${app.appName || 'Unknown App'}" has been in testing for 15 days. Consider moving it to production.`,
+      createdAt: serverTimestamp(),
+      owner: app.owner || '',
+      appName: app.appName || 'Unknown App',
+    });
+  });
+}
       } catch (err) {
         console.error('Notif check failed for', appDoc.id, err);
       }
