@@ -142,7 +142,7 @@ const daysActive = Math.round((todayDay - startDay) / DAY);
           });
         }
 
-       if (daysActive >= 15 && !app.productionNotificationCreated) {
+       if (daysActive >= 16 && !app.productionNotificationCreated) {
   await runTransaction(db, async (tx) => {
     const ref = doc(db, 'apps', appDoc.id);
     const snap = await tx.get(ref);

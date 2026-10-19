@@ -1485,13 +1485,12 @@ export default function AdminApps() {
 
                         nowMidnight.setHours(0, 0, 0, 0);
 
-                        const days =
-                          Math.floor(
-                            Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) /
-                              (1000 * 60 * 60 * 24)
-                          ) + 1;
+                        const days = Math.floor(
+  Math.max(0, nowMidnight.getTime() - startMidnight.getTime()) /
+    (1000 * 60 * 60 * 24)
+);
 
-                        setEditDayCount(days);
+setEditDayCount(days);
                       } else {
                         setEditDayCount(0);
                       }
